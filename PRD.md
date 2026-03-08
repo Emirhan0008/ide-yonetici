@@ -6,9 +6,11 @@
 
 ---
 
-## 1. Mimari Değişim Önerileri ve Kütüphaneler
+## 1. Mimari Değişim Önerileri ve Kritik Kısıtlamalar
 
-Uygulamanın ölçeklenebilirliğini ve güvenliğini artırmak için aşağıdaki kütüphanelerin entegrasyonu önerilir:
+Uygulamanın ölçeklenebilirliğini artırmak için modern kütüphaneler kullanılırken aşağıdaki **en yüksek öncelikli** kısıtlamaya uyulmalıdır:
+
+> **Kritik Kısıtlama:** Uygulama ne kadar modernize edilirse edilsin, son kullanıcı sistemi tek bir `.py` dosyasını çalıştırarak ayağa kaldırabilmelidir. Tüm frontend varlıkları (assets) ve backend mantığı bu ana dosyada (self-contained) toplanmalıdır.
 
 ### 1.1. Backend (Python)
 - **FastAPI:** `http.server` yerine kullanılacak. Otomatik dökümantasyon (Swagger), yüksek hız ve tip güvenliği sağlar.
@@ -48,6 +50,7 @@ Uygulamanın ölçeklenebilirliğini ve güvenliğini artırmak için aşağıda
 - **Performans:** FastAPI'nin asenkron yapısı sayesinde eşzamanlı işlemler daha hızlı gerçekleştirilecek.
 - **Modülerlik:** Klasör yapısı `backend/` ve `frontend/` olarak ayrılarak projenin yönetimi kolaylaştırılacak.
 - **Güvenlik:** API uç noktaları korumalı hale getirilecek ve veri girişleri Pydantic ile sanitize edilecek.
+- **Taşınabilirlik (Portability):** Tüm bağımlılıklar (`requirements.txt`) yüklendikten sonra, uygulama tek bir ana dosya üzerinden (`main.py` veya `ide_yonetici.py`) sorunsuz çalışmalıdır.
 
 ---
 

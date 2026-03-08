@@ -5,10 +5,10 @@ Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için krit
 ## 🎯 Proje Vizyonu ve Durumu
 Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V2.0 (Stabil)** aşamasındadır.
 
-## 🛠️ Teknik Mimari ve Genişleme
-- **Mevcut Yapı:** Python 3 Standart Kütüphaneleri (`http.server`, `sqlite3`).
-- **Genişleme İzni:** Proje modern kütüphanelere ve harici paketlere (FastAPI, Flask, SQLAlchemy, Pydantic vb.) açıktır. Ölçeklenebilirlik ve yeni özellikler için bu kütüphanelerin kullanımı teşvik edilir.
-- **Frontend Gelişimi:** Mevcut Vanilla JS yapısı, ihtiyaca göre React, Vue veya gelişmiş UI kütüphaneleriyle modernize edilebilir.
+## 🛠️ Teknik Mimari ve Temel Prensip
+- **EN BÜYÜK ÖNCELİK:** Uygulama tek bir `.py` dosyası çalıştırılarak (Self-contained) ayağa kalkmalıdır. Tüm HTML, CSS ve JS kodları bu dosya içinde gömülü (inline) kalmaya devam etmelidir.
+- **Kütüphane Kullanımı:** Proje modern kütüphanelere (FastAPI, Flask, SQLAlchemy vb.) açıktır ancak bu paketler `requirements.txt` dosyasında listelenmelidir. Uygulama modüler parçalara ayrılsa bile, son çalışma aşamasında (runtime) taşınabilirliği korumak için tek bir ana dosyadan yönetilmelidir.
+- **Frontend Gelişimi:** UI kütüphaneleri kullanılabilir, fakat nihai çıktı (bundle) Python dosyası içine gömülerek "tek dosya ile çalıştırma" özelliği korunmalıdır.
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
 - **Taslak Sistemi (V6):** 
