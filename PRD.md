@@ -43,6 +43,23 @@ Uygulamanın ölçeklenebilirliğini artırmak için modern kütüphaneler kulla
 ### 2.4. Dosya Sistemi Entegrasyonu (Advanced)
 - **Watchdog:** Yerel proje dizinlerindeki değişiklikleri (son dosya güncelleme tarihi vb.) otomatik takip ederek dashboard'da sergileme.
 
+## 3. Kullanıcı Dostu Arayüz (UI/UX) Geliştirmeleri
+
+### 3.1. Kanban Görünümü (Trello Modu)
+- Projelerin "Aktif", "Pasif" ve "Arşiv" sütunlarında sergilendiği alternatif bir görünüm modu.
+- Sürükle-bırak (Drag & Drop) desteği ile durumlar arası geçiş.
+
+### 3.2. Dinamik Görsel Kimlik
+- IDE isimlerine göre (Cursor için mavi, VS Code için lacivert vb.) kart kenarlık renklerinin veya ikonlarının otomatik belirlenmesi.
+- Proje kartlarına favicon desteği eklenmesi.
+
+### 3.3. Hızlı Kart İşlemleri
+- Kartların üzerine tıklandığında veya hover yapıldığında çıkan "Tek Tıkla Arşivle", "Kopyala", "Yıldızla" gibi hızlı aksiyon butonları.
+
+### 3.4. Arama ve Gruplama
+- Arama sonuçlarında eşleşen kelimelerin vurgulanması (Highlight).
+- Projelerin IDE'lerine göre gruplanmış görünümü.
+
 ---
 
 ## 3. Teknik Gereksinimler (NFR)

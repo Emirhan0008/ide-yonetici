@@ -11,10 +11,13 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - **Frontend Gelişimi:** UI kütüphaneleri kullanılabilir, fakat nihai çıktı (bundle) Python dosyası içine gömülerek "tek dosya ile çalıştırma" özelliği korunmalıdır.
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
+- **Durum Sistemi (V3):**
+    - Yeni durumlar: "Bitti", "Yarım Kaldı", "Bitmedi ama çalışıyor", "Pasif", "Arşiv".
+    - İstatistikler: "Devam Eden" sayısı, "Yarım Kaldı" ve "Bitmedi ama çalışıyor" durumlarının toplamıdır.
 - **Taslak Sistemi (V6):** 
     - Taslaklar `localStorage`'da `proje_taslak` anahtarıyla tutulur. 
     - **Debounce:** Yazım sırasında 300ms gecikme ile kaydedilir.
-    - **Guard:** Taslak kaydı işlemi **asla** `modalKapat` fonksiyonu içinde veya sonrasında tetiklenmemelidir. Sadece aktif `input` olaylarında çalışmalıdır (boş formun taslağı silme riskini önlemek için).
+    - **Guard:** Taslak kaydı işlemi **asla** `modalKapat` fonksiyonu içinde veya sonrasında tetiklenmemelidir.
 - **Modal Güvenliği:** 
     - Input alanında metin seçerken mouse dışarı kayarsa modalın kapanmaması için `mousedown` ve `click` overlay üzerinde çapraz kontrol edilir. Bu mantığı bozmayın.
 - **Veritabanı:** 

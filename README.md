@@ -10,10 +10,11 @@ Bulut (Cursor, Replit, Cloud9 vb.) ve lokal geliştirme ortamlarındaki projeler
 
 ## 🚀 Öne Çıkan Özellikler
 
-*   **⚡ Modern Arayüz:** Glassmorphism tasarımı, Electric Blue tema ve akıcı animasyonlar.
-*   **💾 Gelişmiş Taslak Sistemi (V6):** Yazdığınız hiçbir şey kaybolmaz! Modal kapansa bile otomatik kayıt ve geri yükleme.
-*   **💻 Çoklu IDE ve Hesap Desteği:** Projelerinizi hangi e-posta veya hangi IDE (Bulut/Lokal) üzerinde bıraktığınızı asla unutmayın.
-*   **🔍 Akıllı Filtreleme:** Proje adına, IDE türüne veya durumuna (Aktif/Arşiv) göre anında arama.
+*   **⚡ Modern Arayüz:** Glassmorphism tasarımı, Electric Blue tema ve akıcı animasyonlar. Alt panelde **Kanban (Trello)** görünümü desteği!
+*   **💾 Gelişmiş Taslak Sistemi (V6):** Yazdığınız hiçbir şey kaybolmaz! Otomatik kayıt ve korumalı geri yükleme.
+*   **📊 Detaylı Durum Yönetimi:** Projeleriniz için "Bitti", "Yarım Kaldı", "Bitmedi ama çalışıyor" gibi net ifadeler.
+*   **🎨 Dinamik Görsellik:** IDE ismine göre otomatik değişen ikonlar ve renkli kart kenarlıkları.
+*   **🔍 Akıllı Arama:** Aranan kelimelerin metin içinde vurgulanması (Highlight).
 *   **📦 Sıfır Bağımlılık:** Sadece standart Python kütüphaneleriyle çalışır. `pip install` derdi yok!
 *   **🛠️ Entegre Araçlar:** Veritabanı yedeği alma (Export/Import), diagnostic raporu ve hafıza temizleme özellikleri.
 

@@ -121,7 +121,7 @@ def proje_ekle(veri):
         veri.get("ide_url", ""),
         veri.get("hesap_adi", ""),
         veri.get("hesap_email", ""),
-        veri.get("durum", "Aktif"),
+        veri.get("durum", "Bitti"),
         veri.get("notlar", ""),
         veri.get("etiketler", ""),
         veri.get("lokal_yol", "")
@@ -147,7 +147,7 @@ def proje_guncelle(proje_id, veri):
         veri.get("ide_url", ""),
         veri.get("hesap_adi", ""),
         veri.get("hesap_email", ""),
-        veri.get("durum", "Aktif"),
+        veri.get("durum", "Bitti"),
         veri.get("notlar", ""),
         veri.get("etiketler", ""),
         veri.get("lokal_yol", ""),
@@ -169,7 +169,7 @@ def istatistikler():
     """Özet istatistikleri döndürür."""
     bag = veritabani_baglantisi()
     toplam = bag.execute("SELECT COUNT(*) FROM projeler").fetchone()[0]
-    aktif = bag.execute("SELECT COUNT(*) FROM projeler WHERE durum='Aktif'").fetchone()[0]
+    aktif = bag.execute("SELECT COUNT(*) FROM projeler WHERE durum IN ('Yarım Kaldı', 'Bitmedi ama çalışıyor')").fetchone()[0]
     bulut = bag.execute("SELECT COUNT(*) FROM projeler WHERE ide_turu='Bulut'").fetchone()[0]
     # Benzersiz IDE ve hesap sayılarını hesapla
     benzersiz_ide = bag.execute("SELECT COUNT(DISTINCT ide_adi) FROM projeler WHERE ide_adi != ''").fetchone()[0]
@@ -472,7 +472,7 @@ ARAYUZ_HTML = r"""<!DOCTYPE html>
   --bg-hover:rgba(255,255,255,0.06);--bg-modal:#111428;
   --text:#e4e4ef;--text2:#7b849e;--text3:#4a546a;
   --accent:#0ea5e9;--accent2:#38bdf8;--glow:rgba(14,165,233,0.25);
-  --green:#10b981;--yellow:#f59e0b;--red:#ef4444;--blue:#3b82f6;
+  --green:#10b981;--yellow:#f59e0b;--orange:#f97316;--red:#ef4444;--blue:#3b82f6;--purple:#a855f7;
   --border:rgba(255,255,255,0.06);--border2:rgba(14,165,233,0.4);
   --r:14px;--rs:10px;--tr:all .25s cubic-bezier(.4,0,.2,1);
 }
@@ -581,7 +581,9 @@ body::before{content:'';position:fixed;inset:0;
 /* ===== ETİKETLER ===== */
 .tag{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:20px;
   font-size:11px;font-weight:600;letter-spacing:.3px}
-.tag-aktif{background:rgba(45,212,160,0.12);color:var(--green)}
+.tag-bitti{background:rgba(16,185,129,0.12);color:var(--green)}
+.tag-yarim{background:rgba(249,115,22,0.12);color:var(--orange)}
+.tag-calisiyor{background:rgba(59,130,246,0.12);color:var(--blue)}
 .tag-pasif{background:rgba(74,74,106,0.2);color:var(--text3)}
 .tag-arsiv{background:rgba(240,194,70,0.12);color:var(--yellow)}
 .tag-bulut{background:rgba(91,168,245,0.12);color:var(--blue)}
@@ -589,6 +591,17 @@ body::before{content:'';position:fixed;inset:0;
 .tag-custom{background:rgba(255,255,255,0.05);color:var(--text)}
 [data-theme="light"] .tag-custom{background:rgba(0,0,0,0.05);}
 .sleep-warning{color:var(--yellow);font-weight:600;font-size:11px;display:inline-flex;align-items:center;gap:4px}
+
+/* ===== KANBAN GÖRÜNÜMÜ ===== */
+.kanban-container{display:none;grid-template-columns:repeat(3,1fr);gap:20px;padding:12px 40px 40px;align-items:flex-start}
+.kanban-column{background:rgba(255,255,255,0.02);border-radius:var(--r);padding:16px;min-height:400px;
+  border:1px solid var(--border);display:flex;flex-direction:column;gap:12px}
+.kanban-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 8px}
+.kanban-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.kanban-count{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text2)}
+
+/* ===== ARAMA VURGULAMA ===== */
+mark{background:var(--yellow);color:#000;border-radius:2px;padding:0 2px}
 
 /* ===== BOŞ DURUM ===== */
 .empty{text-align:center;padding:80px 40px;color:var(--text3)}
@@ -704,6 +717,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     <div><h1>IDE Proje Takip</h1><p>Projelerini, IDE'lerini ve hesaplarını tek yerden yönet</p></div>
   </div>
   <div class="header-actions">
+    <button class="btn btn-icon" onclick="gorunumDegistir()" title="Görünüm Değiştir / Kanban" id="btn-view">📦</button>
     <button class="btn btn-icon" onclick="temaDegistir()" title="Temayı Değiştir" id="btn-tema">🌓</button>
     <button class="btn btn-ghost" onclick="ayarlarAc()">⚙ Ayarlar</button>
     <button class="btn btn-primary" onclick="modalAc()">+ Yeni Proje</button>
@@ -713,7 +727,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 <!-- ===== İSTATİSTİKLER ===== -->
 <div class="stats" style="margin-top:20px">
   <div class="stat"><div class="stat-val" id="s-toplam">0</div><div class="stat-lbl">Toplam Proje</div></div>
-  <div class="stat"><div class="stat-val" id="s-aktif">0</div><div class="stat-lbl">Aktif</div></div>
+  <div class="stat"><div class="stat-val" id="s-aktif">0</div><div class="stat-lbl">Devam Eden</div></div>
   <div class="stat"><div class="stat-val" id="s-ide">0</div><div class="stat-lbl">Farklı IDE</div></div>
   <div class="stat"><div class="stat-val" id="s-hesap">0</div><div class="stat-lbl">Farklı Hesap</div></div>
 </div>
@@ -724,8 +738,12 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     <input class="search-input" id="ara" placeholder="Proje, IDE veya hesap ara..." oninput="goster()">
   </div>
   <select class="filter-sel" id="f-durum" onchange="goster()">
-    <option value="">Tüm Durumlar</option><option value="Aktif">Aktif</option>
-    <option value="Pasif">Pasif</option><option value="Arşiv">Arşiv</option>
+    <option value="">Tüm Durumlar</option>
+    <option value="Bitti">Bitti</option>
+    <option value="Yarım Kaldı">Yarım Kaldı</option>
+    <option value="Bitmedi ama çalışıyor">Bitmedi ama çalışıyor</option>
+    <option value="Pasif">Pasif</option>
+    <option value="Arşiv">Arşiv</option>
   </select>
   <select class="filter-sel" id="f-tur" onchange="goster()">
     <option value="">Tüm Türler</option><option value="Bulut">☁ Bulut</option>
@@ -738,6 +756,31 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 
 <!-- ===== PROJE KARTLARI ===== -->
 <div class="grid" id="kartlar"></div>
+
+<!-- ===== KANBAN GÖRÜNÜMÜ ===== -->
+<div class="kanban-container" id="kanban">
+  <div class="kanban-column" id="col-progress">
+    <div class="kanban-head">
+      <div class="kanban-title"><span style="color:var(--blue)">⏳</span> Devam Edenler</div>
+      <div class="kanban-count" id="count-progress">0</div>
+    </div>
+    <div class="kanban-cards" id="cards-progress"></div>
+  </div>
+  <div class="kanban-column" id="col-done">
+    <div class="kanban-head">
+      <div class="kanban-title"><span style="color:var(--green)">✅</span> Tamamlananlar</div>
+      <div class="kanban-count" id="count-done">0</div>
+    </div>
+    <div class="kanban-cards" id="cards-done"></div>
+  </div>
+  <div class="kanban-column" id="col-other">
+    <div class="kanban-head">
+      <div class="kanban-title"><span style="color:var(--text3)">📦</span> Diğer / Arşiv</div>
+      <div class="kanban-count" id="count-other">0</div>
+    </div>
+    <div class="kanban-cards" id="cards-other"></div>
+  </div>
+</div>
 
 <!-- ===== PROJE EKLEME/DÜZENLEME MODAL ===== -->
 <div class="overlay" id="modal">
@@ -802,7 +845,10 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     <div class="form-group">
       <label>Durum</label>
       <select id="f-durum-sec">
-        <option value="Aktif">✅ Aktif</option><option value="Pasif">⏸ Pasif</option>
+        <option value="Bitti">✅ Bitti</option>
+        <option value="Yarım Kaldı">🚧 Yarım Kaldı</option>
+        <option value="Bitmedi ama çalışıyor">⚙️ Bitmedi ama çalışıyor</option>
+        <option value="Pasif">⏸ Pasif</option>
         <option value="Arşiv">📦 Arşiv</option>
       </select>
     </div>
@@ -897,6 +943,29 @@ let projeler = [];     // Tüm proje kayıtları
 let oneriVeri = {};    // Otomatik tamamlama verisi (IDE, hesap, e-posta)
 let tanimliIdeler = [];
 let tanimliHesaplar = [];
+let kanbanModu = false; 
+
+/* ===============================================
+   UYGULAMA MANTIĞI
+   =============================================== */
+function getIdeIcon(adi) {
+  if (!adi) return '🛠';
+  const a = adi.toLowerCase();
+  if (a.includes('cursor')) return '🔵';
+  if (a.includes('code') || a.includes('vs')) return '🟦';
+  if (a.includes('replit')) return '🌀';
+  if (a.includes('firebase')) return '🔥';
+  if (a.includes('github') || a.includes('codespace')) return '🐙';
+  if (a.includes('colab')) return '🔶';
+  if (a.includes('intellij') || a.includes('pycharm')) return '🏮';
+  return '🛠';
+}
+
+function gorunumDegistir() {
+  kanbanModu = !kanbanModu;
+  document.getElementById('btn-view').textContent = kanbanModu ? '🔲' : '📦';
+  goster();
+}
 
 /* ===============================================
    API YARDIMCILARI
@@ -922,6 +991,12 @@ function esc(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+function highlight(metin, ara) {
+  if (!ara) return esc(metin);
+  const re = new RegExp(`(${ara.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+  return esc(metin).replace(re, '<mark>$1</mark>');
 }
 
 /* ===============================================
@@ -968,7 +1043,6 @@ function goster() {
   const fTur = document.getElementById('f-tur').value;
   const fIde = document.getElementById('f-ide').value;
 
-  // Filtreleme: arama metni, durum, tür ve IDE'ye göre
   const liste = projeler.filter(p => {
     const metin = (p.proje_adi+' '+p.ide_adi+' '+p.hesap_adi+' '+p.notlar+' '+p.hesap_email).toLowerCase();
     if (arama && !metin.includes(arama)) return false;
@@ -979,85 +1053,108 @@ function goster() {
   });
 
   const kutu = document.getElementById('kartlar');
+  const kanbanKutu = document.getElementById('kanban');
+  
+  if (kanbanModu) {
+    kutu.style.display = 'none';
+    kanbanKutu.style.display = 'grid';
+  } else {
+    kutu.style.display = 'grid';
+    kanbanKutu.style.display = 'none';
+  }
 
   // Boş durum mesajı
   if (liste.length === 0) {
     kutu.innerHTML = `<div class="empty" style="grid-column:1/-1">
       <div class="empty-icon">📂</div>
-      <div class="empty-text">${projeler.length === 0
-        ? 'Henüz hiç proje eklenmemiş.<br>İlk projenizi ekleyerek başlayın!'
-        : 'Filtreye uygun proje bulunamadı.'}</div>
-      ${projeler.length === 0 ? '<button class="btn btn-primary" onclick="modalAc()">+ İlk Projeyi Ekle</button>' : ''}
+      <div class="empty-text">${projeler.length === 0 ? 'Henüz hiç proje eklenmemiş.' : 'Filtreye uygun proje bulunamadı.'}</div>
     </div>`;
+    // Kanban'ı temizle
+    ['progress', 'done', 'other'].forEach(id => {
+        document.getElementById('cards-'+id).innerHTML = '';
+        document.getElementById('count-'+id).textContent = '0';
+    });
     return;
   }
 
-  // Proje kartlarını oluştur
-  kutu.innerHTML = liste.map(p => {
-    const durumClass = p.durum==='Aktif'?'tag-aktif':p.durum==='Pasif'?'tag-pasif':'tag-arsiv';
+  const statusMap = {
+    'Bitti': 'tag-bitti',
+    'Yarım Kaldı': 'tag-yarim',
+    'Bitmedi ama çalışıyor': 'tag-calisiyor',
+    'Pasif': 'tag-pasif',
+    'Arşiv': 'tag-arsiv'
+  };
+
+  const kartUret = (p) => {
+    const durumClass = statusMap[p.durum] || 'tag-pasif';
     const turClass = p.ide_turu==='Bulut'?'tag-bulut':'tag-lokal';
     const turIcon = p.ide_turu==='Bulut'?'☁':'🖥';
+    const ideIcon = getIdeIcon(p.ide_adi);
 
-    let eHtml = '';
-    if (p.etiketler) {
-      eHtml = `<div style="margin-top:2px">` + p.etiketler.split(',').map(e=>e.trim()).filter(e=>e).map(e=>`<span class="tag tag-custom">#${esc(e)}</span>`).join(' ') + `</div>`;
-    }
-
-    let uykuUyari = '';
-    if (p.son_guncelleme && p.durum === 'Aktif') {
-      const g = Math.floor((new Date() - new Date(p.son_guncelleme)) / 86400000);
-      if (g > 30) uykuUyari = `<div class="sleep-warning">⚠️ ${g} gündür işlem yapılmadı! Uyku riskine dikkat.</div>`;
-    }
+    const etiketHtml = p.etiketler ? `<div style="margin-top:2px">` + p.etiketler.split(',').map(e=>e.trim()).filter(e=>e).map(e=>`<span class="tag tag-custom">#${highlight(e, arama)}</span>`).join(' ') + `</div>` : '';
 
     let acBtn = '';
     if (p.ide_turu === 'Bulut' && p.ide_url) {
-      acBtn = `<button class="btn btn-primary btn-sm" onclick="window.open('${esc(p.ide_url)}', '_blank')" title="Tarayıcıda Aç">🚀 Aç</button>`;
+      acBtn = `<button class="btn btn-primary btn-sm" onclick="window.open('${esc(p.ide_url)}', '_blank')" title="Tarayıcıda Aç">🚀</button>`;
     } else if (p.ide_turu === 'Lokal' && p.lokal_yol) {
-      acBtn = `<button class="btn btn-primary btn-sm" onclick="lokalAc('${esc(p.lokal_yol).replace(/\\/g,'\\\\')}')" title="Klasörü Aç">💻 Aç</button>`;
+        acBtn = `<button class="btn btn-primary btn-sm" onclick="lokalAc('${esc(p.lokal_yol).replace(/\\/g,'\\\\')}')" title="Klasörü Aç">💻</button>`;
     }
 
-    return `<div class="card">
+    const archiveBtn = p.durum === 'Arşiv' 
+        ? `<button class="btn-icon" onclick="hizliDurum(${p.id}, 'Bitti')" title="Geri Al">♻️</button>`
+        : `<button class="btn-icon" onclick="hizliDurum(${p.id}, 'Arşiv')" title="Arşivle">📦</button>`;
+
+    return `<div class="card" style="border-left: 4px solid var(--${durumClass.split('-')[1]})">
       <div class="card-top">
-        <div style="flex:1;margin-right:10px">
-          <div class="card-title">${esc(p.proje_adi)}</div>
-          ${eHtml}
+        <div style="flex:1">
+          <div class="card-title">${highlight(p.proje_adi, arama)}</div>
+          ${etiketHtml}
         </div>
         <div class="card-actions">
           ${acBtn}
-          <button class="btn-icon edit" onclick="duzenle(${p.id})" title="Düzenle">✏️</button>
-          <button class="btn-icon danger" onclick="silOnay(${p.id},'${esc(p.proje_adi).replace(/'/g,"\\'")}')" title="Sil">🗑️</button>
+          ${archiveBtn}
+          <button class="btn-icon edit" onclick="duzenle(${p.id})">✏️</button>
         </div>
       </div>
       <div class="card-body">
-        ${p.ide_adi ? `<div class="card-row">
-          <span class="icon">💻</span>
-          <span class="label">IDE</span>
-          <span class="value">${esc(p.ide_adi)} <span class="tag ${turClass}" style="margin-left:6px">${turIcon} ${esc(p.ide_turu)}</span></span>
-        </div>` : ''}
-        ${p.ide_url ? `<div class="card-row">
-          <span class="icon">🔗</span>
-          <span class="label">URL</span>
-          <span class="value"><a href="${esc(p.ide_url)}" target="_blank">${esc(p.ide_url)}</a></span>
-        </div>` : ''}
+        <div class="card-row">
+          <span class="icon">${ideIcon}</span>
+          <span class="value"><strong>${highlight(p.ide_adi, arama)}</strong> <span class="tag ${turClass}">${turIcon}</span></span>
+        </div>
         ${p.hesap_adi ? `<div class="card-row">
-          <span class="icon">👤</span>
-          <span class="label">Hesap</span>
-          <span class="value">${esc(p.hesap_adi)}${p.hesap_email ? ' <span style="color:var(--text3);font-size:12px">('+esc(p.hesap_email)+')</span>' : ''}</span>
+          <span class="icon">👤</span><span class="value">${highlight(p.hesap_adi, arama)}</span>
         </div>` : ''}
-        ${p.lokal_yol && p.ide_turu === 'Lokal' ? `<div class="card-row">
-          <span class="icon">📂</span>
-          <span class="label">Dizin</span>
-          <span class="value" style="font-family:monospace;font-size:11px">${esc(p.lokal_yol)}</span>
-        </div>` : ''}
-        ${p.notlar ? `<div class="card-note">📝 ${esc(p.notlar)}</div>` : ''}
-        ${uykuUyari}
+        ${p.notlar ? `<div class="card-note">${highlight(p.notlar, arama)}</div>` : ''}
       </div>
       <div class="card-footer">
         <span class="tag ${durumClass}">${esc(p.durum)}</span>
-        <span class="card-date">🕐 ${esc(p.son_guncelleme||'')}</span>
+        <span class="card-date">🕐 ${esc((p.son_guncelleme||'').split(' ')[0])}</span>
       </div>
     </div>`;
-  }).join('');
+  };
+
+  if (!kanbanModu) {
+    kutu.innerHTML = liste.map(p => kartUret(p)).join('');
+  } else {
+    const group = {
+        'progress': liste.filter(p => p.durum === 'Yarım Kaldı' || p.durum === 'Bitmedi ama çalışıyor'),
+        'done': liste.filter(p => p.durum === 'Bitti'),
+        'other': liste.filter(p => p.durum === 'Pasif' || p.durum === 'Arşiv')
+    };
+    ['progress', 'done', 'other'].forEach(id => {
+        document.getElementById('cards-'+id).innerHTML = group[id].map(p => kartUret(p)).join('');
+        document.getElementById('count-'+id).textContent = group[id].length;
+    });
+  }
+}
+
+async function hizliDurum(id, yeniDurum) {
+    const p = projeler.find(x=>x.id===id);
+    if(!p) return;
+    const veri = {...p, durum: yeniDurum};
+    await api('/api/projeler/'+id, 'PUT', veri);
+    bildirim('Durum güncellendi: ' + yeniDurum);
+    yukle();
 }
 
 /* ===============================================
@@ -1148,8 +1245,9 @@ function taslakYukle() {
     document.getElementById('f-ide-tur').value = t.ide_turu || 'Lokal';
     document.getElementById('f-url').value = t.ide_url || '';
     document.getElementById('f-hesap').value = t.hesap_adi || '';
+    document.getElementById('f-hesap').value = t.hesap_adi || '';
     document.getElementById('f-email').value = t.hesap_email || '';
-    document.getElementById('f-durum-sec').value = t.durum || 'Aktif';
+    document.getElementById('f-durum-sec').value = t.durum || 'Bitti';
     document.getElementById('f-notlar').value = t.notlar || '';
     document.getElementById('f-etiketler').value = t.etiketler || '';
     document.getElementById('f-lokal-yol').value = t.lokal_yol || '';
@@ -1183,7 +1281,7 @@ function modalAc() {
     document.getElementById(id).value = '';
   });
   document.getElementById('f-ide-tur').value = 'Lokal';
-  document.getElementById('f-durum-sec').value = 'Aktif';
+  document.getElementById('f-durum-sec').value = 'Bitti';
 
   // Taslağı yükle (Eğer varsa yukarıdaki boşlukları doldurur)
   const restored = taslakYukle();
