@@ -1,23 +1,37 @@
-# AGENTS.md
+# 🤖 Yapay Zeka & Geliştirici Bilgi Merkezi (agent.md)
 
-## Must-follow constraints
-- **UI Updates:** Changes to HTML, CSS, or JS in `ide_yonetici.py` (inside `ARAYUZ_HTML`) **must** be followed by a full process restart to reflect.
-- **Draft Guard:** Never call `taslakKaydet` during or after `modalKapat`. Saving must only occur during active `input` events to prevent empty-form overwrites.
-- **Modal Closure:** Maintain the `mousedown` + `click` dual-check on overlays to prevent accidental closure during text selection drags.
-- **Zero Ext. Deps:** Only use Python standard libraries. Adding `pip` requirements is forbidden.
+Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için kritik teknik hafızayı ve operasyonel kuralları içerir. **Lütfen geliştirmeye başlamadan önce okuyun.**
 
-## Validation before finishing
-- **Backend:** Successfully execute `python PROJE_TEST_SUITE.py`.
-- **Diagnostics:** Verify `GET /api/diagnostic` returns `"Healthy"`.
+## 🎯 Proje Vizyonu ve Durumu
+Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V2.0 (Stabil)** aşamasındadır.
 
-## Important locations
-- **Single File:** Entire app (server + UI) resides in `ide_yonetici.py`.
-- **DB Path:** `ide_yonetici.db` is pinned relative to the script's absolute path.
+## 🛠️ Teknik Mimari Kısıtlamaları
+- **Dil:** Sadece Python 3 Standart Kütüphaneleri (`http.server`, `sqlite3`, `webbrowser`).
+- **Forbidden:** Hiçbir harici `pip` paketi (Flask, Django, Requests vb.) eklenemez. Uygulama "sıfır bağımlılık" prensibiyle çalışır.
+- **Frontend:** Tek dosya (`ide_yonetici.py`) içine gömülü Vanilla JS, CSS3 ve HTML5. Modern Glassmorphism ve Electric Blue teması korunmalıdır.
 
-## Change safety rules
-- **Migrations:** Wrap `ALTER TABLE` in `try-except` within `tablolari_olustur` for non-breaking schema updates.
-- **Draft Persistence (V6):** Preserve the 300ms debounce and "ID is null" guard to prevent draft-production conflicts.
+## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
+- **Taslak Sistemi (V6):** 
+    - Taslaklar `localStorage`'da `proje_taslak` anahtarıyla tutulur. 
+    - **Debounce:** Yazım sırasında 300ms gecikme ile kaydedilir.
+    - **Guard:** Taslak kaydı işlemi **asla** `modalKapat` fonksiyonu içinde veya sonrasında tetiklenmemelidir. Sadece aktif `input` olaylarında çalışmalıdır (boş formun taslağı silme riskini önlemek için).
+- **Modal Güvenliği:** 
+    - Input alanında metin seçerken mouse dışarı kayarsa modalın kapanmaması için `mousedown` ve `click` overlay üzerinde çapraz kontrol edilir. Bu mantığı bozmayın.
+- **Veritabanı:** 
+    - Migrasyonlar `tablolari_olustur` içinde `try-except` bloklarıyla `ALTER TABLE` şeklinde yapılmalıdır.
 
-## Known gotchas
-- **Browser Cache:** UI changes often require `Ctrl+F5` after server restarts.
-- **Auto-Port:** Server increments from `8700` if busy; ensure API calls resolve the dynamic port.
+## 📂 Önemli Dosyalar ve Konumlar
+- `ide_yonetici.py`: Tüm uygulama (Backend + Frontend) buradadır.
+- `ide_yonetici.db`: SQLite veritabanı (script ile aynı dizinde).
+- `PROJE_TEST_SUITE.py`: Backend bütünlük testleri.
+- `dist/IDE_Yonetici.exe`: PyInstaller ile üretilen taşınabilir sürüm.
+
+## 🚀 İş Akışı ve Doğrulama
+1.  **Geliştirme:** `ARAYUZ_HTML` değişkeni içindeki JS/CSS kodlarını güncelleyin.
+2.  **Yenileme:** Değişikliklerin yansıması için Python sürecini durdurup (`Ctrl+C`) tekrar başlatın. Tarayıcıda `Ctrl+F5` yapın.
+3.  **Test:** `python PROJE_TEST_SUITE.py` komutunu çalıştırın.
+4.  **Tanılama:** Uygulama içindeki `/api/diagnostic` uç noktasının "Healthy" döndüğünü doğrulayın.
+
+## ⚠️ Bilinen "Gotcha"lar
+- **Port Çakışması:** Sunucu `8700` meşgulse otomatik olarak portu artırır. API isteklerinde portun dinamik olabileceğini unutmayın.
+- **Lokal Dizin:** Projelerdeki "Lokal Dizin" yolu `subprocess` ile açılırken Windows yol formatına (backslashes) dikkat edilmelidir.
