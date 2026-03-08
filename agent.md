@@ -5,10 +5,10 @@ Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için krit
 ## 🎯 Proje Vizyonu ve Durumu
 Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V2.0 (Stabil)** aşamasındadır.
 
-## 🛠️ Teknik Mimari Kısıtlamaları
-- **Dil:** Sadece Python 3 Standart Kütüphaneleri (`http.server`, `sqlite3`, `webbrowser`).
-- **Forbidden:** Hiçbir harici `pip` paketi (Flask, Django, Requests vb.) eklenemez. Uygulama "sıfır bağımlılık" prensibiyle çalışır.
-- **Frontend:** Tek dosya (`ide_yonetici.py`) içine gömülü Vanilla JS, CSS3 ve HTML5. Modern Glassmorphism ve Electric Blue teması korunmalıdır.
+## 🛠️ Teknik Mimari ve Genişleme
+- **Mevcut Yapı:** Python 3 Standart Kütüphaneleri (`http.server`, `sqlite3`).
+- **Genişleme İzni:** Proje modern kütüphanelere ve harici paketlere (FastAPI, Flask, SQLAlchemy, Pydantic vb.) açıktır. Ölçeklenebilirlik ve yeni özellikler için bu kütüphanelerin kullanımı teşvik edilir.
+- **Frontend Gelişimi:** Mevcut Vanilla JS yapısı, ihtiyaca göre React, Vue veya gelişmiş UI kütüphaneleriyle modernize edilebilir.
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
 - **Taslak Sistemi (V6):** 
