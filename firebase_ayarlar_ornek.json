@@ -1,0 +1,15 @@
+{
+  "aktif": true,
+  "database_url": "https://PROJE_ID-default-rtdb.europe-west1.firebasedatabase.app",
+  "auth_token": "FIREBASE_DATABASE_SECRET_VEYA_TOKEN",
+  "web_api_key": "FIREBASE_WEB_API_KEY",
+  "google_client_id": "GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+  "auth_domain": "PROJE_ID.firebaseapp.com",
+  "project_id": "PROJE_ID",
+  "storage_bucket": "PROJE_ID.firebasestorage.app",
+  "messaging_sender_id": "",
+  "app_id": "",
+  "measurement_id": "",
+  "kok_yol": "ide_yonetici",
+  "otomatik_yedek": true
+}

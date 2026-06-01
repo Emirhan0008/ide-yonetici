@@ -2,3 +2,5 @@
 *.sqlite
 *.sqlite3
 __pycache__/
+firebase_ayarlar.json
+yedekler/
