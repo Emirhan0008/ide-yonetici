@@ -45,6 +45,13 @@ body::before{content:'';position:fixed;inset:0;
 .brand h1{font-size:18px;font-weight:700;letter-spacing:-.5px}
 .brand p{font-size:11px;color:var(--text2);margin-top:2px;font-weight:400}
 .header-actions{display:flex;gap:10px;align-items:center}
+.avatar-circle{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:border-color .15s;flex-shrink:0;position:relative}
+.avatar-circle:hover{border-color:var(--accent)}
+.avatar-circle img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
+.avatar-dropdown{position:absolute;top:100%;right:0;margin-top:8px;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:1000;overflow:hidden}
+.avatar-dropdown .ad-header{padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.avatar-dropdown .ad-item{padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text)}
+.avatar-dropdown .ad-item:hover{background:var(--bg2)}
 
 /* ===== BUTONLAR ===== */
 .btn{padding:10px 22px;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;
@@ -142,13 +149,6 @@ body::before{content:'';position:fixed;inset:0;
 /* İçerik elementleri z-index:1 — overlay'lerin (z-index:0) üstünde */
 .card-actions-bar,.card-content,.kart-renk-popup,.kart-renk-btn{
   position:relative;z-index:1}
-.drag-handle{position:absolute;top:8px;left:8px;width:22px;height:22px;
-  display:none;align-items:center;justify-content:center;z-index:2;
-  cursor:grab;color:rgba(255,255,255,0.7);font-size:13px;
-  background:rgba(0,0,0,0.35);border-radius:5px;transition:var(--tr)}
-.drag-handle:hover{color:#fff;background:rgba(0,0,0,0.55)}
-.kanban-container .card{aspect-ratio:3/4}
-.kanban-container .drag-handle{display:flex}
 /* Üst aksiyon çubuğu */
 .card-actions-bar{display:flex;justify-content:flex-end;align-items:center;
   gap:6px;padding:10px 10px 0;flex-shrink:0}
@@ -208,21 +208,8 @@ body::before{content:'';position:fixed;inset:0;
 [data-theme="light"] .tag-custom{background:rgba(0,0,0,0.05);}
 .sleep-warning{color:var(--yellow);font-weight:600;font-size:11px;display:inline-flex;align-items:center;gap:4px}
 
-/* ===== KANBAN GÖRÜNÜMÜ ===== */
-.kanban-container{display:none;grid-template-columns:repeat(3,1fr);gap:20px;padding:12px 40px 40px;align-items:flex-start}
-.kanban-column{background:rgba(255,255,255,0.02);border-radius:var(--r);padding:16px;min-height:400px;
-  border:1px solid var(--border);display:flex;flex-direction:column;gap:12px}
-.kanban-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding:0 8px}
-.kanban-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
-.kanban-count{font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text2)}
-
 /* ===== ARAMA VURGULAMA ===== */
 mark{background:var(--yellow);color:#000;border-radius:2px;padding:0 2px}
-.card[draggable="true"]{cursor:default}
-.card.dragging{opacity:0.4;cursor:grabbing}
-.kanban-cards{min-height:100px;transition:var(--tr);border-radius:var(--rs)}
-.kanban-cards.drag-over{background:rgba(124,106,239,0.06);box-shadow:inset 0 0 10px rgba(0,0,0,0.1)}
-
 /* ===== BOŞ DURUM ===== */
 .empty{text-align:center;padding:80px 40px;color:var(--text3)}
 .empty-icon{font-size:56px;margin-bottom:16px;opacity:.4}
@@ -401,14 +388,11 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 .gorsel-kaldir-btn:hover{background:var(--red)}
 
 /* ===== RESPONSIVE ===== */
-@media(max-width:900px){
-  .kanban-container{grid-template-columns:1fr;gap:30px}
-}
 @media(max-width:640px){
   .header{flex-direction:column;align-items:flex-start;gap:15px;padding:20px 20px 0}
   .header-actions{width:100%;overflow-x:auto;padding-bottom:10px;justify-content:flex-start}
   .header-actions .btn{flex-shrink:0}
-  .controls,.stats,.grid,.kanban-container{padding-left:16px;padding-right:16px}
+  .controls,.stats,.grid{padding-left:16px;padding-right:16px}
   .grid{grid-template-columns:1fr}
   .form-row{grid-template-columns:1fr}
   .stats{grid-template-columns:repeat(2,1fr);padding-bottom:15px}
@@ -432,11 +416,10 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     <div><h1>IDE Proje Takip</h1><p>Projelerini, IDE'lerini ve hesaplarını tek yerden yönet</p></div>
   </div>
   <div class="header-actions">
-    <button class="btn btn-icon" onclick="gorunumDegistir()" title="Görünüm Değiştir / Kanban" id="btn-view">📦</button>
     <button class="btn btn-icon" onclick="temaDegistir()" title="Temayı Değiştir" id="btn-tema">🌓</button>
     <button class="btn btn-ghost" onclick="ayarlarAc()">⚙ Ayarlar</button>
     <button class="btn btn-primary" onclick="modalAc()">+ Yeni Proje</button>
-    <button class="btn btn-primary" id="firebase-signin-btn" style="display:none">🔐 Google ile Giriş Yap</button>
+    <div id="firebase-signin-btn" class="avatar-circle" title="Google ile Giriş Yap" style="display:none"></div>
   </div>
 </header>
 
@@ -474,31 +457,6 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 
 <!-- ===== PROJE KARTLARI ===== -->
 <div class="grid" id="kartlar"></div>
-
-<!-- ===== KANBAN GÖRÜNÜMÜ ===== -->
-<div class="kanban-container" id="kanban">
-  <div class="kanban-column" id="col-progress">
-    <div class="kanban-head">
-      <div class="kanban-title"><span style="color:var(--blue)">⏳</span> Devam Edenler</div>
-      <div class="kanban-count" id="count-progress">0</div>
-    </div>
-    <div class="kanban-cards" id="cards-progress" ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'Yarım Kaldı')"></div>
-  </div>
-  <div class="kanban-column" id="col-done">
-    <div class="kanban-head">
-      <div class="kanban-title"><span style="color:var(--green)">✅</span> Tamamlananlar</div>
-      <div class="kanban-count" id="count-done">0</div>
-    </div>
-    <div class="kanban-cards" id="cards-done" ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'Bitti')"></div>
-  </div>
-  <div class="kanban-column" id="col-other">
-    <div class="kanban-head">
-      <div class="kanban-title"><span style="color:var(--text3)">📦</span> Diğer / Arşiv</div>
-      <div class="kanban-count" id="count-other">0</div>
-    </div>
-    <div class="kanban-cards" id="cards-other" ondragover="onDragOver(event)" ondragenter="onDragEnter(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, 'Pasif')"></div>
-  </div>
-</div>
 
 <!-- ===== PROJE EKLEME/DÜZENLEME MODAL ===== -->
 <div class="overlay" id="modal" onclick="if(event.target===this)modalKapat()">
@@ -708,6 +666,10 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
           </div>
         </div>
         <div id="google-login-box" style="display:none"></div>
+        <div id="yedek-auth-prompt" style="display:none;text-align:center;padding:20px 0;margin-bottom:12px;background:var(--bg2);border-radius:var(--rs,8px);border:1px dashed var(--border)">
+          <p style="font-size:13px;margin-bottom:12px;line-height:1.5;color:var(--text2);padding:0 10px">☁️ Yedekleme ve senkronizasyon için Google hesabınızla giriş yapmanız gerekir.<br>Projeleriniz, IDE'leriniz ve hesaplarınız kaybolmaz, giriş yaptığınızda otomatik yüklenir.</p>
+          <a href="#" class="btn btn-primary" id="yedek-auth-btn" style="display:inline-flex">🔐 Google ile Giriş Yap</a>
+        </div>
         <button class="btn btn-ghost" id="google-cikis-btn" onclick="googleCikis()" style="display:none;margin-bottom:10px">Google Çıkış</button>
         <div id="yedek-durum" style="font-size:12px;color:var(--text3);margin-bottom:4px;line-height:1.4"></div>
         <div id="bulut-durum" style="font-size:12px;color:var(--text3);line-height:1.4"></div>
@@ -759,7 +721,6 @@ const App = {
   oneriVeri: {},
   tanimliIdeler: [],
   tanimliHesaplar: [],
-  kanbanModu: false,
   taslakTimer: null,
   overlayTiklamaBaslangic: null,
   aktifRenkPopup: null,
@@ -769,7 +730,6 @@ const App = {
     return {
       ara: document.getElementById('ara'),
       kartlar: document.getElementById('kartlar'),
-      kanban: document.getElementById('kanban'),
       modal: document.getElementById('modal'),
       ist: {
         toplam: document.getElementById('s-toplam'),
@@ -913,9 +873,6 @@ function goster() {
     return true;
   });
 
-  elements.kartlar.style.display = App.kanbanModu ? 'none' : 'grid';
-  elements.kanban.style.display = App.kanbanModu ? 'grid' : 'none';
-
   if (liste.length === 0) {
     const hicProjeYok = App.projeler.length === 0;
     elements.kartlar.innerHTML = `<div class="empty" style="grid-column:1/-1">
@@ -929,18 +886,7 @@ function goster() {
     return;
   }
 
-  if (!App.kanbanModu) {
-    elements.kartlar.innerHTML = liste.map(p => kartUret(p, ara)).join('');
-  } else {
-    const gruplar = {
-      progress: liste.filter(p => p.durum === 'Yarım Kaldı' || p.durum === 'Bitmedi ama çalışıyor'),
-      done: liste.filter(p => p.durum === 'Bitti'),
-      other: liste.filter(p => p.durum === 'Pasif' || p.durum === 'Arşiv')
-    };
-    Object.keys(gruplar).forEach(key => {
-      document.getElementById(`cards-${key}`).innerHTML = gruplar[key].map(p => kartUret(p, ara)).join('');
-      document.getElementById(`count-${key}`).textContent = gruplar[key].length;
-    });
+  elements.kartlar.innerHTML = liste.map(p => kartUret(p, ara)).join('');
   }
 }
 
@@ -1012,11 +958,10 @@ function kartUret(p, ara) {
   }
 
   return `
-    <div class="card${p.kart_gorseli ? ' has-bg' : ''}" data-durum="${Utils.esc(p.durum || '')}" style="${renkDegiskeni}${borderStyle}" draggable="true" ondragstart="onDragStart(event, '${p.id}')" ondragend="onDragEnd(event)" id="kart-${p.id}">
+    <div class="card${p.kart_gorseli ? ' has-bg' : ''}" data-durum="${Utils.esc(p.durum || '')}" style="${renkDegiskeni}${borderStyle}" id="kart-${p.id}">
       ${bgGorsel}
       <div class="kart-overlay-ust"></div>
       <div class="kart-overlay-alt"></div>
-      <div class="drag-handle" title="Sürüklemek için tutun">⠿</div>
       <div class="kart-renk-popup" id="renk-popup-${p.id}">
         <div class="kart-renk-popup-palet">${paletHtml}</div>
         <div class="kart-renk-popup-alt">
@@ -1079,45 +1024,6 @@ async function hizliDurum(id, yeniDurum) {
 }
 
 /* KANBAN DRAG & DROP */
-function onDragStart(e, id) {
-  e.dataTransfer.setData('text/plain', String(id));
-  e.dataTransfer.effectAllowed = 'move';
-  e.currentTarget.classList.add('dragging');
-}
-
-function onDragEnd(e) {
-  e.currentTarget.classList.remove('dragging');
-  document.querySelectorAll('.kanban-cards').forEach(c => c.classList.remove('drag-over'));
-}
-
-function onDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  const target = e.currentTarget;
-  if (target.classList.contains('kanban-cards')) target.classList.add('drag-over');
-}
-
-function onDragEnter(e) {
-  e.preventDefault();
-  const target = e.currentTarget;
-  if (target.classList.contains('kanban-cards')) target.classList.add('drag-over');
-}
-
-function onDragLeave(e) {
-  // Sadece gerçek çıkışta (alt elemanlara geçişte değil) efekti kaldır
-  if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget)) return;
-  e.currentTarget.classList.remove('drag-over');
-}
-
-async function onDrop(e, yeniDurum) {
-  e.preventDefault();
-  const target = e.currentTarget;
-  target.classList.remove('drag-over');
-  const idStr = e.dataTransfer.getData('text/plain');
-  const id = parseInt(idStr);
-  if (!isNaN(id)) hizliDurum(id, yeniDurum);
-}
-
 /* ===============================================
    MODAL — Proje ekleme/düzenleme formu
    =============================================== */
@@ -1913,14 +1819,8 @@ async function iceAktar(e) {
   reader.readAsText(file);
 }
 
-function gorunumDegistir() { 
-  App.kanbanModu = !App.kanbanModu; 
-  document.getElementById('btn-view').textContent = App.kanbanModu ? '🔲' : '📦'; 
-  goster(); 
-}
-
 /* ===============================================
-   EVENT LISTENERS VE BAŞLANGIÇ
+   MODAL — Proje ekleme/düzenleme formu
    =============================================== */
 window.addEventListener('input', e => {
   if (e.target.closest('.modal-body')) {
@@ -2194,35 +2094,87 @@ window.addEventListener('unload', () => {
       }
     }
   });
+  // Redirect sonucu (popup engellenip redirect'e düşülürse)
+  auth.getRedirectResult().then(function (result) {
+    if (result && result.user) {
+      console.log('[Shim] Redirect ile giriş:', result.user.email);
+    }
+  }).catch(function (e) {
+    if (e.code === 'auth/null-user' || e.code === 'auth/no-auth-event') return;
+    console.error('[Shim] getRedirectResult:', e.code, e.message);
+  });
   function guncelleSignInBtn(user) {
-    const fbBtn = document.getElementById('firebase-signin-btn');
-    if (!fbBtn) return;
+    var el = document.getElementById('firebase-signin-btn');
+    if (!el) return;
+    var yedekPrompt = document.getElementById('yedek-auth-prompt');
+    var yedekBtn = document.getElementById('yedek-auth-btn');
+    var dropdownGizle = function () {
+      if (el._dropdown) el._dropdown.style.display = 'none';
+    };
     if (user) {
-      fbBtn.style.display = 'inline-flex';
-      fbBtn.disabled = false;
-      fbBtn.innerHTML = '<span style="font-size:18px">✅</span> Bağlandı - Çıkış Yap (' + (user.email || '') + ')';
-      fbBtn.onclick = async function () {
-        try { await auth.signOut(); } catch (e) { console.error(e); }
+      if (yedekPrompt) yedekPrompt.style.display = 'none';
+      el.style.display = 'inline-flex';
+      if (user.photoURL) {
+        el.innerHTML = '<img src="' + user.photoURL + '" alt="" referrerpolicy="no-referrer">';
+      } else {
+        el.innerHTML = user.email ? user.email[0].toUpperCase() : '?';
+      }
+      if (!el._dropdown) {
+        var dd = document.createElement('div');
+        dd.className = 'avatar-dropdown';
+        dd.style.display = 'none';
+        dd.innerHTML = '<div class="ad-header">' + (user.email || '') + '</div><div class="ad-item" data-action="signout">🚪 Çıkış Yap</div>';
+        dd.addEventListener('click', function (e) {
+          var item = e.target.closest('.ad-item');
+          if (!item) return;
+          if (item.dataset.action === 'signout') {
+            dd.style.display = 'none';
+            auth.signOut().catch(function (e) { console.error(e); });
+          }
+        });
+        el.appendChild(dd);
+        el._dropdown = dd;
+        document.addEventListener('click', function (e) {
+          if (!el.contains(e.target)) dropdownGizle();
+        });
+      } else {
+        el._dropdown.querySelector('.ad-header').textContent = user.email || '';
+        el._dropdown.style.display = 'none';
+      }
+      el.title = '';
+      el.onclick = function (e) {
+        e.stopPropagation();
+        var dd = el._dropdown;
+        if (!dd) return;
+        dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
       };
     } else {
-      fbBtn.style.display = 'inline-flex';
-      fbBtn.disabled = false;
-      fbBtn.innerHTML = '<span style="font-size:18px">🔐</span> Google ile Giriş Yap';
-      fbBtn.onclick = async function () {
-        try {
-          fbBtn.disabled = true;
-          fbBtn.textContent = 'Giriş yapılıyor...';
-          const provider = new firebase.auth.GoogleAuthProvider();
-          await auth.signInWithPopup(provider);
-        } catch (e) {
-          console.error('signInWithPopup hata:', e);
-          if (typeof Utils !== 'undefined' && Utils.bildirim) {
-            Utils.bildirim('Giriş başarısız: ' + (e.message || e.code || 'bilinmeyen'), 'err');
+      if (yedekPrompt) yedekPrompt.style.display = 'block';
+      el.style.display = 'inline-flex';
+      el.innerHTML = '<span style="font-size:16px;opacity:.5">?</span>';
+      el.style.fontWeight = '400';
+      el.style.fontSize = '13px';
+      removeDropdown();
+      el.title = 'Google ile Giriş Yap';
+      var signIn = function () {
+        el.style.opacity = '.4';
+        if (yedekBtn) yedekBtn.style.opacity = '.4';
+        var provider = new firebase.auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        auth.signInWithPopup(provider).catch(function (e) {
+          if (e.code === 'auth/popup-blocked') {
+            auth.signInWithRedirect(provider);
+          } else {
+            if (typeof Utils !== 'undefined' && Utils.bildirim) {
+              Utils.bildirim('Giriş başarısız: ' + (e.message || e.code || 'bilinmeyen'), 'err');
+            }
+            el.style.opacity = '1';
+            if (yedekBtn) yedekBtn.style.opacity = '1';
           }
-          fbBtn.disabled = false;
-          fbBtn.innerHTML = '<span style="font-size:18px">🔐</span> Google ile Giriş Yap';
-        }
+        });
       };
+      el.onclick = signIn;
+      if (yedekBtn) yedekBtn.onclick = signIn;
     }
   }
   if (typeof window.cikisYap === 'function') {
@@ -2237,7 +2189,7 @@ window.addEventListener('unload', () => {
   // Çözüm: identifier argümanlarını string literal'a çevir.
   function fixOnclickString(code) {
     return code
-      .replace(/(ac|duzenle|silOnay|modalSil|kartDuzenle|ayarAc|kapatAyar|kartRengiUygula|kartRenkPopupAc|hizliDurum|onDragStart|onDragEnd|notToggle|ayarKaydet)\((\w+)/g, "$1('$2'")
+      .replace(/(ac|duzenle|silOnay|modalSil|kartDuzenle|ayarAc|kapatAyar|kartRengiUygula|kartRenkPopupAc|hizliDurum|notToggle|ayarKaydet)\((\w+)/g, "$1('$2'")
       .replace(/,\s*(\w+)\)/g, ", '$1')")
       .replace(/,\s*(\w+)\s*\)/g, ", '$1')");
   }
@@ -2272,7 +2224,6 @@ window.addEventListener('unload', () => {
   document.addEventListener('DOMContentLoaded', function () {
     setTimeout(function () {
       gizleBackendOnly();
-      guncelleSignInBtn(auth.currentUser);
       fixOnclickIdentifiers(document);
     }, 200);
     // Periyodik onclick fix (MutationObserver kaçırırsa) — 250ms agresif
