@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['ide_yonetici.py'],
+    ['ide_yonetici.pyw'],
     pathex=[],
     binaries=[],
     datas=[],
