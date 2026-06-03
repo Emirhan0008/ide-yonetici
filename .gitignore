@@ -1,10 +1,55 @@
+# ===== Python =====
 *.db
 *.sqlite
 *.sqlite3
 __pycache__/
-firebase_ayarlar.json
-yedekler/
-ide_yonetici_son_yedek.json
-dist/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+
+# ===== Node / JS =====
+node_modules/
+package-lock.json
+yarn.lock
+
+# ===== IDE / Editör =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== İşletim sistemi =====
+.DS_Store
+Thumbs.db
+
+# ===== Çıktılar =====
 build/
+dist/
+*.spec
+*.log
+*.tmp
+*.bak
+*.orig
+
+# ===== Testler =====
+test_*.py
+tests/
+
+# ===== Çevre değişkenleri =====
+.env
+.env.*
+
+# ===== Test coverage =====
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+
+# ===== Proje özel =====
+firebase_ayarlar.json
+ide_yonetici_son_yedek.json
 .kiro/
+.firebase/

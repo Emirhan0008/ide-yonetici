@@ -1,0 +1,6 @@
+Yedekleme konumu: W:\Yedekler\IDE_Yonetici\
+- yedekler/         → otomatik JSON yedekler
+- ide_yonetici_son_yedek.json   → en son manuel yedek
+
+Bu dosyalar .gitignore'da olduğu için repoda takip edilmez.
+Geri yükleme için arşivden kopyalayıp repo köküne koyun.
