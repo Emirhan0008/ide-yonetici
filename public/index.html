@@ -1,1010 +1,13 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-╔══════════════════════════════════════════════════════════════╗
-║               IDE PROJE TAKİP SİSTEMİ v2.5                  ║
-║  Bulut ve lokal IDE'lerdeki projeleri takip etmek için       ║
-║  tarayıcı tabanlı modern bir yönetim arayüzü.               ║
-║                                                              ║
-║  Tüm bilgiler tek bir proje formu içinde yönetilir:          ║
-║  Proje adı, IDE, hesap, URL, durum ve notlar.                ║
-╚══════════════════════════════════════════════════════════════╝
-
-Kullanım: Bu dosyaya çift tıklayın veya terminalde çalıştırın.
-Tarayıcınızda otomatik olarak açılacaktır.
-"""
-
-import sqlite3
-import json
-import os
-import sys
-import zlib
-import base64
-import webbrowser
-import threading
-import subprocess
-import shutil
-from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, quote, urlencode
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
-from contextlib import contextmanager
-
-# ============================================================
-# VERİTABANI AYARLARI
-# ============================================================
-UYGULAMA_KLASORU = os.path.dirname(os.path.abspath(__file__))
-VERITABANI_YOLU = os.path.join(UYGULAMA_KLASORU, "ide_yonetici.db")
-YEDEK_KLASORU = os.path.join(UYGULAMA_KLASORU, "yedekler")
-SON_YEDEK_JSON = os.path.join(UYGULAMA_KLASORU, "ide_yonetici_son_yedek.json")
-BULUT_AYARLAR_YOLU = os.path.join(UYGULAMA_KLASORU, "firebase_ayarlar.json")
-OTOMATIK_YEDEK_LIMITI = 60
-BULUT_TIMEOUT = 25
-SUNUCU_PORT = 8888  # Varsayılan port numarası
-GLOBAL_SUNUCU = None
-GLOBAL_BULUT_SONUC = {"durum": "Henüz çalışmadı"}
-GLOBAL_FIREBASE_KULLANICI = None
-GLOBAL_FIREBASE_ID_TOKEN = ""
-
-
-@contextmanager
-def veritabani_baglantisi():
-    """SQLite veritabanına güvenli bağlantı sağlar."""
-    baglanti = sqlite3.connect(VERITABANI_YOLU, timeout=10)
-    baglanti.row_factory = sqlite3.Row
-    baglanti.execute("PRAGMA journal_mode=WAL")
-    baglanti.execute("PRAGMA synchronous=FULL")
-    baglanti.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield baglanti
-    finally:
-        baglanti.close()
-
-
-def tablolari_olustur():
-    """Veritabanı tablolarını ve gerekli sütunları oluşturur."""
-    with veritabani_baglantisi() as baglanti:
-        # Ana tablo
-        baglanti.execute("""
-            CREATE TABLE IF NOT EXISTS projeler (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                proje_adi TEXT NOT NULL,
-                ide_adi TEXT DEFAULT '',
-                ide_turu TEXT DEFAULT 'Lokal',
-                ide_url TEXT DEFAULT '',
-                hesap_adi TEXT DEFAULT '',
-                hesap_email TEXT DEFAULT '',
-                durum TEXT DEFAULT 'Aktif',
-                notlar TEXT DEFAULT '',
-                son_guncelleme TEXT DEFAULT (datetime('now','localtime')),
-                olusturma_tarihi TEXT DEFAULT (datetime('now','localtime')),
-                etiketler TEXT DEFAULT '',
-                lokal_yol TEXT DEFAULT ''
-            )
-        """)
-
-        # Migration: Yeni sütunları güvenli bir şekilde ekle
-        mevcut_sutunlar = [row['name'] for row in baglanti.execute("PRAGMA table_info(projeler)").fetchall()]
-        if 'etiketler' not in mevcut_sutunlar:
-            baglanti.execute("ALTER TABLE projeler ADD COLUMN etiketler TEXT DEFAULT ''")
-        if 'lokal_yol' not in mevcut_sutunlar:
-            baglanti.execute("ALTER TABLE projeler ADD COLUMN lokal_yol TEXT DEFAULT ''")
-        if 'deploy_url' not in mevcut_sutunlar:
-            baglanti.execute("ALTER TABLE projeler ADD COLUMN deploy_url TEXT DEFAULT ''")
-        if 'kart_rengi' not in mevcut_sutunlar:
-            baglanti.execute("ALTER TABLE projeler ADD COLUMN kart_rengi TEXT DEFAULT ''")
-        if 'kart_gorseli' not in mevcut_sutunlar:
-            baglanti.execute("ALTER TABLE projeler ADD COLUMN kart_gorseli TEXT DEFAULT ''")
-
-        # Tanımlı IDE ve Hesap tabloları
-        baglanti.execute("""
-            CREATE TABLE IF NOT EXISTS tanimli_ideler (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ide_adi TEXT NOT NULL,
-                ide_turu TEXT DEFAULT 'Lokal',
-                ide_url TEXT DEFAULT ''
-            )
-        """)
-        baglanti.execute("""
-            CREATE TABLE IF NOT EXISTS tanimli_hesaplar (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                hesap_adi TEXT NOT NULL,
-                hesap_email TEXT DEFAULT ''
-            )
-        """)
-        baglanti.commit()
-
-
-def tum_verileri_al():
-    """Veritabanındaki tüm ana veriyi yedeklenebilir formatta döndürür."""
-    with veritabani_baglantisi() as bag:
-        return {
-            "projeler": [dict(s) for s in bag.execute("SELECT * FROM projeler ORDER BY son_guncelleme DESC").fetchall()],
-            "tanimli_ideler": [dict(s) for s in bag.execute("SELECT * FROM tanimli_ideler ORDER BY ide_adi").fetchall()],
-            "tanimli_hesaplar": [dict(s) for s in bag.execute("SELECT * FROM tanimli_hesaplar ORDER BY hesap_adi").fetchall()]
-        }
-
-
-def _atomik_json_yaz(yol, veri):
-    """JSON dosyasını önce geçici dosyaya yazıp sonra değiştirir."""
-    gecici_yol = f"{yol}.tmp"
-    with open(gecici_yol, "w", encoding="utf-8") as dosya:
-        json.dump(veri, dosya, ensure_ascii=False, indent=2)
-    os.replace(gecici_yol, yol)
-
-
-def _yedek_adi_temizle(neden):
-    temiz = "".join(ch if ch.isalnum() else "_" for ch in str(neden)).strip("_")
-    return (temiz or "otomatik")[:40]
-
-
-def _eski_yedekleri_temizle():
-    """Yedek klasörünü makul boyutta tutar."""
-    if not os.path.isdir(YEDEK_KLASORU):
-        return
-    for desen in ("ide_yedek_*.json", "ide_yonetici_*.db"):
-        dosyalar = sorted(
-            (os.path.join(YEDEK_KLASORU, ad) for ad in os.listdir(YEDEK_KLASORU) if ad.startswith(desen.split("*")[0]) and ad.endswith(desen.split("*")[-1])),
-            key=os.path.getmtime,
-            reverse=True
-        )
-        for eski in dosyalar[OTOMATIK_YEDEK_LIMITI:]:
-            try:
-                os.remove(eski)
-            except OSError:
-                pass
-
-
-def otomatik_yedek_al(neden="otomatik"):
-    """Her önemli değişiklikten sonra JSON ve DB yedeği alır."""
-    try:
-        os.makedirs(YEDEK_KLASORU, exist_ok=True)
-        zaman = datetime.now().strftime("%Y%m%d_%H%M%S")
-        temiz_neden = _yedek_adi_temizle(neden)
-        veri = tum_verileri_al()
-        yedek = {
-            "meta": {
-                "olusturma_zamani": datetime.now().isoformat(timespec="seconds"),
-                "neden": neden,
-                "veritabani": VERITABANI_YOLU,
-                "proje_sayisi": len(veri["projeler"])
-            },
-            **veri
-        }
-
-        json_yolu = os.path.join(YEDEK_KLASORU, f"ide_yedek_{zaman}_{temiz_neden}.json")
-        db_yolu = os.path.join(YEDEK_KLASORU, f"ide_yonetici_{zaman}_{temiz_neden}.db")
-        _atomik_json_yaz(json_yolu, yedek)
-        _atomik_json_yaz(SON_YEDEK_JSON, yedek)
-        if os.path.exists(VERITABANI_YOLU):
-            kaynak = sqlite3.connect(VERITABANI_YOLU)
-            hedef = sqlite3.connect(db_yolu)
-            try:
-                kaynak.backup(hedef)
-            finally:
-                hedef.close()
-                kaynak.close()
-        _eski_yedekleri_temizle()
-        ayarlar = firebase_ayarlari_oku()
-        if ayarlar.get("aktif") and ayarlar.get("otomatik_yedek", True):
-            bulut_yedekle(neden)
-        return json_yolu
-    except Exception:
-        return None
-
-
-def firebase_varsayilan_ayarlar():
-    return {
-        "aktif": False,
-        "database_url": "",
-        "auth_token": "",
-        "web_api_key": "",
-        "google_client_id": "",
-        "kok_yol": "ide_yonetici",
-        "otomatik_yedek": True
-    }
-
-
-def firebase_ayarlari_oku():
-    """Firebase ayarlarını okur; dosya yoksa bulutu kapalı kabul eder."""
-    ayarlar = firebase_varsayilan_ayarlar()
-    if not os.path.exists(BULUT_AYARLAR_YOLU):
-        return ayarlar
-    try:
-        with open(BULUT_AYARLAR_YOLU, "r", encoding="utf-8") as dosya:
-            okunan = json.load(dosya)
-        if isinstance(okunan, dict):
-            ayarlar.update(okunan)
-    except Exception:
-        pass
-    return ayarlar
-
-
-def _firebase_adres(ayarlar, yol):
-    database_url = (ayarlar.get("database_url") or "").rstrip("/")
-    kok_yol = (ayarlar.get("kok_yol") or "ide_yonetici").strip("/")
-    parcalar = [p for p in f"{kok_yol}/{yol.strip('/')}".split("/") if p]
-    adres = f"{database_url}/{'/'.join(quote(p, safe='') for p in parcalar)}.json"
-    token = ayarlar.get("auth_token") or GLOBAL_FIREBASE_ID_TOKEN or ""
-    if token:
-        adres = f"{adres}?{urlencode({'auth': token})}"
-    return adres
-
-
-def _firebase_istek(metod, yol, veri=None):
-    ayarlar = firebase_ayarlari_oku()
-    if not ayarlar.get("aktif"):
-        return {"ok": False, "hata": "Firebase kapalı"}
-    if not ayarlar.get("database_url") or "PROJE_ID" in ayarlar.get("database_url", ""):
-        return {"ok": False, "hata": "Firebase database_url eksik"}
-
-    govde = None
-    if veri is not None:
-        govde = json.dumps(veri, ensure_ascii=False).encode("utf-8")
-    istek = Request(
-        _firebase_adres(ayarlar, yol),
-        data=govde,
-        method=metod,
-        headers={"Content-Type": "application/json; charset=utf-8"}
-    )
-    try:
-        with urlopen(istek, timeout=BULUT_TIMEOUT) as yanit:
-            metin = yanit.read().decode("utf-8")
-            return {"ok": True, "veri": json.loads(metin) if metin else None}
-    except HTTPError as hata:
-        detay = hata.read().decode("utf-8", errors="ignore")
-        return {"ok": False, "hata": f"HTTP {hata.code}: {detay}"}
-    except URLError as hata:
-        return {"ok": False, "hata": str(hata.reason)}
-    except Exception as hata:
-        return {"ok": False, "hata": str(hata)}
-
-
-def google_ile_firebase_giris(google_credential):
-    """Google kimlik bilgisini Firebase Auth ID token'a çevirir."""
-    global GLOBAL_FIREBASE_KULLANICI, GLOBAL_FIREBASE_ID_TOKEN
-    ayarlar = firebase_ayarlari_oku()
-    api_key = ayarlar.get("web_api_key") or ""
-    if not api_key:
-        return {"ok": False, "hata": "Firebase web_api_key eksik"}
-    if not google_credential:
-        return {"ok": False, "hata": "Google credential eksik"}
-
-    adres = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?{urlencode({'key': api_key})}"
-    payload = {
-        "postBody": urlencode({"id_token": google_credential, "providerId": "google.com"}),
-        "requestUri": "http://localhost",
-        "returnIdpCredential": True,
-        "returnSecureToken": True
-    }
-    istek = Request(
-        adres,
-        data=json.dumps(payload).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json; charset=utf-8"}
-    )
-    try:
-        with urlopen(istek, timeout=BULUT_TIMEOUT) as yanit:
-            veri = json.loads(yanit.read().decode("utf-8"))
-        GLOBAL_FIREBASE_ID_TOKEN = veri.get("idToken", "")
-        GLOBAL_FIREBASE_KULLANICI = {
-            "email": veri.get("email", ""),
-            "displayName": veri.get("displayName", ""),
-            "photoUrl": veri.get("photoUrl", ""),
-            "localId": veri.get("localId", "")
-        }
-        return {"ok": True, "kullanici": GLOBAL_FIREBASE_KULLANICI}
-    except HTTPError as hata:
-        detay = hata.read().decode("utf-8", errors="ignore")
-        return {"ok": False, "hata": f"HTTP {hata.code}: {detay}"}
-    except Exception as hata:
-        return {"ok": False, "hata": str(hata)}
-
-
-def google_cikis():
-    global GLOBAL_FIREBASE_KULLANICI, GLOBAL_FIREBASE_ID_TOKEN
-    GLOBAL_FIREBASE_KULLANICI = None
-    GLOBAL_FIREBASE_ID_TOKEN = ""
-    return {"ok": True}
-
-
-def _veriyi_sikistir(veri_dict):
-    """
-    Veriyi Firebase için sıkıştırır.
-    - kart_gorseli (Base64 görsel) Firebase'e gönderilmez — lokal DB'de kalır.
-    - Kalan veri JSON → zlib compress (level 9) → base64 → tek string.
-    Tipik tasarruf: %60-75.
-    """
-    # Görselleri çıkar, sadece meta bilgiyi tut
-    projeler_temiz = []
-    for p in veri_dict.get("projeler", []):
-        p_kopya = dict(p)
-        if p_kopya.get("kart_gorseli"):
-            p_kopya["kart_gorseli"] = ""   # Firebase'e gönderilmez
-        projeler_temiz.append(p_kopya)
-
-    temiz_veri = {**veri_dict, "projeler": projeler_temiz}
-    ham = json.dumps(temiz_veri, ensure_ascii=False, separators=(',', ':')).encode("utf-8")
-    sikistirilmis = zlib.compress(ham, level=9)
-    return {
-        "v": 1,                                              # format versiyonu
-        "z": base64.b64encode(sikistirilmis).decode("ascii"),
-        "boyut_ham": len(ham),
-        "boyut_sikis": len(sikistirilmis),
-        "oran": round(len(sikistirilmis) / max(len(ham), 1) * 100, 1)
-    }
-
-
-def _veriyi_ac(paket):
-    """Sıkıştırılmış Firebase paketini açar."""
-    if not isinstance(paket, dict):
-        return None
-    # Eski format (sıkıştırılmamış) — geriye dönük uyumluluk
-    if "projeler" in paket:
-        return paket
-    # Yeni format
-    if paket.get("v") == 1 and "z" in paket:
-        try:
-            sikistirilmis = base64.b64decode(paket["z"])
-            ham = zlib.decompress(sikistirilmis)
-            return json.loads(ham.decode("utf-8"))
-        except Exception:
-            return None
-    return None
-
-
-def bulut_yedekle(neden="otomatik"):
-    """Güncel veriyi sıkıştırarak Firebase Realtime Database'e gönderir."""
-    global GLOBAL_BULUT_SONUC
-    zaman = datetime.now().strftime("%Y%m%d_%H%M%S")
-    veri = tum_verileri_al()
-    meta = {
-        "olusturma_zamani": datetime.now().isoformat(timespec="seconds"),
-        "neden": neden,
-        "kaynak": "ide_yonetici",
-        "proje_sayisi": len(veri["projeler"])
-    }
-    # Sıkıştırılmış paket (görseller hariç)
-    sikis = _veriyi_sikistir({**meta, **veri})
-    paket = {"meta": meta, "sikis": sikis}
-
-    son_yedek = _firebase_istek("PUT", "son_yedek", paket)
-    if not son_yedek.get("ok"):
-        GLOBAL_BULUT_SONUC = {
-            "durum": "Hata", "hata": son_yedek.get("hata"),
-            "zaman": datetime.now().isoformat(timespec="seconds")
-        }
-        return GLOBAL_BULUT_SONUC
-
-    tarihli = _firebase_istek("PUT", f"yedekler/{zaman}_{_yedek_adi_temizle(neden)}", paket)
-    GLOBAL_BULUT_SONUC = {
-        "durum": "Tamam" if tarihli.get("ok") else "Kısmi",
-        "hata": tarihli.get("hata"),
-        "zaman": datetime.now().isoformat(timespec="seconds"),
-        "proje_sayisi": len(veri["projeler"]),
-        "boyut_kb": round(sikis.get("boyut_sikis", 0) / 1024, 1),
-        "oran": sikis.get("oran", 0)
-    }
-    return GLOBAL_BULUT_SONUC
-
-
-def bulut_son_yedegi_oku():
-    sonuc = _firebase_istek("GET", "son_yedek")
-    if not sonuc.get("ok"):
-        return sonuc
-    ham_veri = sonuc.get("veri")
-    if not isinstance(ham_veri, dict):
-        return {"ok": False, "hata": "Bulutta geçerli son_yedek bulunamadı"}
-
-    # Sıkıştırılmış format
-    if "sikis" in ham_veri:
-        veri = _veriyi_ac(ham_veri["sikis"])
-    else:
-        # Eski format (geriye dönük uyumluluk)
-        veri = ham_veri
-
-    if not isinstance(veri, dict) or "projeler" not in veri:
-        return {"ok": False, "hata": "Bulut verisi çözümlenemedi"}
-    return {"ok": True, "veri": veri}
-
-
-def buluttan_geri_yukle():
-    """Firebase'deki son yedeği yerel veritabanına geri yükler."""
-    sonuc = bulut_son_yedegi_oku()
-    if not sonuc.get("ok"):
-        return sonuc
-    otomatik_yedek_al("buluttan_geri_yukleme_oncesi")
-    yedek_verisini_veritabanina_yaz(sonuc["veri"], mevcutlari_sil=True)
-    otomatik_yedek_al("buluttan_geri_yukleme")
-    return {"ok": True, "mesaj": "Bulut yedeği geri yüklendi", "proje_sayisi": len(sonuc["veri"].get("projeler", []))}
-
-
-def bulut_durumu():
-    ayarlar = firebase_ayarlari_oku()
-    database_url = ayarlar.get("database_url") or ""
-    son = GLOBAL_BULUT_SONUC
-    return {
-        "aktif": bool(ayarlar.get("aktif")),
-        "hazir": bool(database_url and "PROJE_ID" not in database_url),
-        "google_giris_hazir": bool(ayarlar.get("web_api_key") and ayarlar.get("google_client_id")),
-        "google_client_id": ayarlar.get("google_client_id") or "",
-        "kullanici": GLOBAL_FIREBASE_KULLANICI,
-        "giris_yapildi": bool(GLOBAL_FIREBASE_ID_TOKEN),
-        "ayar_dosyasi": BULUT_AYARLAR_YOLU,
-        "kok_yol": ayarlar.get("kok_yol") or "ide_yonetici",
-        "otomatik_yedek": bool(ayarlar.get("otomatik_yedek", True)),
-        "son_sonuc": son,
-        "son_boyut_kb": son.get("boyut_kb"),
-        "son_oran": son.get("oran"),
-    }
-
-
-def yedek_durumu():
-    """Yedek sisteminin kısa durum bilgisini döndürür."""
-    json_yedekleri = []
-    db_yedekleri = []
-    if os.path.isdir(YEDEK_KLASORU):
-        json_yedekleri = [ad for ad in os.listdir(YEDEK_KLASORU) if ad.startswith("ide_yedek_") and ad.endswith(".json")]
-        db_yedekleri = [ad for ad in os.listdir(YEDEK_KLASORU) if ad.startswith("ide_yonetici_") and ad.endswith(".db")]
-    son_yedek_tarihi = None
-    if os.path.exists(SON_YEDEK_JSON):
-        son_yedek_tarihi = datetime.fromtimestamp(os.path.getmtime(SON_YEDEK_JSON)).isoformat(timespec="seconds")
-    return {
-        "yedek_klasoru": YEDEK_KLASORU,
-        "son_yedek_json": SON_YEDEK_JSON,
-        "son_yedek_tarihi": son_yedek_tarihi,
-        "json_yedek_sayisi": len(json_yedekleri),
-        "db_yedek_sayisi": len(db_yedekleri)
-    }
-
-
-def _toplu_ekle(bag, tablo, liste, sutunlar):
-    if not liste:
-        return True
-    mevcut_sutunlar = {row["name"] for row in bag.execute(f"PRAGMA table_info({tablo})").fetchall()}
-    aktif_sutunlar = [s for s in sutunlar if s in mevcut_sutunlar]
-    if not aktif_sutunlar:
-        return False
-    placeholder = ",".join(["?"] * len(aktif_sutunlar))
-    sorgu = f"INSERT OR REPLACE INTO {tablo} ({','.join(aktif_sutunlar)}) VALUES ({placeholder})"
-    try:
-        for item in liste:
-            values = tuple(item.get(c) for c in aktif_sutunlar)
-            bag.execute(sorgu, values)
-        return True
-    except sqlite3.Error:
-        return False
-
-
-def yedek_verisini_veritabanina_yaz(veri, mevcutlari_sil=False):
-    """JSON yedeğini veritabanına yazar."""
-    if isinstance(veri, list):
-        veri = {"projeler": veri}
-    with veritabani_baglantisi() as bag:
-        if mevcutlari_sil:
-            bag.execute("DELETE FROM projeler")
-            bag.execute("DELETE FROM tanimli_ideler")
-            bag.execute("DELETE FROM tanimli_hesaplar")
-        sonuc_p = _toplu_ekle(
-            bag,
-            "projeler",
-            veri.get("projeler"),
-            ["id", "proje_adi", "ide_adi", "ide_turu", "ide_url", "hesap_adi", "hesap_email", "durum", "notlar", "son_guncelleme", "olusturma_tarihi", "etiketler", "lokal_yol", "deploy_url", "kart_rengi", "kart_gorseli"]
-        )
-        sonuc_i = _toplu_ekle(bag, "tanimli_ideler", veri.get("tanimli_ideler"), ["id", "ide_adi", "ide_turu", "ide_url"])
-        sonuc_h = _toplu_ekle(bag, "tanimli_hesaplar", veri.get("tanimli_hesaplar"), ["id", "hesap_adi", "hesap_email"])
-        bag.commit()
-    return sonuc_p and sonuc_i and sonuc_h
-
-
-def _son_json_yedegini_bul():
-    adaylar = []
-    if os.path.exists(SON_YEDEK_JSON):
-        adaylar.append(SON_YEDEK_JSON)
-    if os.path.isdir(YEDEK_KLASORU):
-        adaylar.extend(
-            os.path.join(YEDEK_KLASORU, ad)
-            for ad in os.listdir(YEDEK_KLASORU)
-            if ad.startswith("ide_yedek_") and ad.endswith(".json")
-        )
-    return max(adaylar, key=os.path.getmtime) if adaylar else None
-
-
-def _son_db_yedegini_bul():
-    if not os.path.isdir(YEDEK_KLASORU):
-        return None
-    adaylar = [
-        os.path.join(YEDEK_KLASORU, ad)
-        for ad in os.listdir(YEDEK_KLASORU)
-        if ad.startswith("ide_yonetici_") and ad.endswith(".db")
-    ]
-    return max(adaylar, key=os.path.getmtime) if adaylar else None
-
-
-def veritabani_saglam_mi():
-    if not os.path.exists(VERITABANI_YOLU):
-        return True
-    try:
-        bag = sqlite3.connect(VERITABANI_YOLU)
-        sonuc = bag.execute("PRAGMA integrity_check").fetchone()[0]
-        bag.close()
-        return sonuc == "ok"
-    except sqlite3.DatabaseError:
-        return False
-
-
-def veritabani_kurtarmayi_dene():
-    """Bozuk veya boş DB durumunda son yedekten otomatik toparlamayı dener."""
-    if not veritabani_saglam_mi():
-        os.makedirs(YEDEK_KLASORU, exist_ok=True)
-        bozuk_yol = os.path.join(YEDEK_KLASORU, f"bozuk_ide_yonetici_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db")
-        try:
-            shutil.move(VERITABANI_YOLU, bozuk_yol)
-        except OSError:
-            pass
-        db_yedegi = _son_db_yedegini_bul()
-        if db_yedegi:
-            shutil.copy2(db_yedegi, VERITABANI_YOLU)
-
-    try:
-        with veritabani_baglantisi() as bag:
-            proje_sayisi = bag.execute("SELECT COUNT(*) FROM projeler").fetchone()[0]
-        if proje_sayisi > 0:
-            return False
-    except sqlite3.DatabaseError:
-        return False
-
-    json_yedegi = _son_json_yedegini_bul()
-    if not json_yedegi:
-        return False
-    try:
-        with open(json_yedegi, "r", encoding="utf-8") as dosya:
-            yedek_verisini_veritabanina_yaz(json.load(dosya), mevcutlari_sil=True)
-        otomatik_yedek_al("kurtarma_sonrasi")
-        return True
-    except Exception:
-        return False
-
-
-# ============================================================
-# VERİTABANI İŞLEMLERİ (CRUD)
-# Tek tablo üzerinde ekleme, listeleme, güncelleme, silme
-# ============================================================
-
-def proje_listele():
-    """Tüm proje kayıtlarını son güncellemeye göre sıralayıca döndürür."""
-    with veritabani_baglantisi() as bag:
-        satirlar = bag.execute("SELECT * FROM projeler ORDER BY son_guncelleme DESC").fetchall()
-        return [dict(s) for s in satirlar]
-
-
-def _lokal_yol_temizle(yol):
-    """Windows 'Yol olarak kopyala' tırnaklarını temizler."""
-    return (yol or "").strip().strip('"\'')
-
-
-def _proje_verisi_hazirla(veri):
-    """Proje verisini standart formata getirir."""
-    return (
-        veri.get("proje_adi"),
-        veri.get("ide_adi", ""),
-        veri.get("ide_turu", "Lokal"),
-        veri.get("ide_url", ""),
-        veri.get("hesap_adi", ""),
-        veri.get("hesap_email", ""),
-        veri.get("durum", "Bitti"),
-        veri.get("notlar", ""),
-        veri.get("etiketler", ""),
-        _lokal_yol_temizle(veri.get("lokal_yol", "")),
-        veri.get("deploy_url", ""),
-        veri.get("kart_rengi", ""),
-        veri.get("kart_gorseli", ""),
-    )
-
-
-def proje_ekle(veri):
-    """Yeni bir proje kaydı ekler."""
-    if not str(veri.get("proje_adi", "")).strip():
-        return {"hata": "Proje adı gerekli"}
-    with veritabani_baglantisi() as bag:
-        sorgu = """
-            INSERT INTO projeler (
-                proje_adi, ide_adi, ide_turu, ide_url, hesap_adi, hesap_email,
-                durum, notlar, etiketler, lokal_yol, deploy_url, kart_rengi, kart_gorseli
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        bag.execute(sorgu, _proje_verisi_hazirla(veri))
-        bag.commit()
-    otomatik_yedek_al("proje_ekle")
-    return {"mesaj": "Proje eklendi"}
-
-
-def proje_guncelle(proje_id, veri):
-    """Mevcut bir proje kaydını günceller."""
-    if not str(veri.get("proje_adi", "")).strip():
-        return {"hata": "Proje adı gerekli"}
-    with veritabani_baglantisi() as bag:
-        sorgu = """
-            UPDATE projeler SET
-                proje_adi=?, ide_adi=?, ide_turu=?, ide_url=?,
-                hesap_adi=?, hesap_email=?, durum=?, notlar=?,
-                etiketler=?, lokal_yol=?, deploy_url=?, kart_rengi=?, kart_gorseli=?,
-                son_guncelleme=datetime('now','localtime')
-            WHERE id=?
-        """
-        cursor = bag.execute(sorgu, _proje_verisi_hazirla(veri) + (proje_id,))
-        bag.commit()
-        if cursor.rowcount == 0:
-            return {"hata": "Proje bulunamadı"}
-    otomatik_yedek_al("proje_guncelle")
-    return {"mesaj": "Proje güncellendi"}
-
-
-def proje_sil(proje_id):
-    """Bir proje kaydını siler."""
-    otomatik_yedek_al("proje_silmeden_once")
-    with veritabani_baglantisi() as bag:
-        cursor = bag.execute("DELETE FROM projeler WHERE id=?", (proje_id,))
-        bag.commit()
-        if cursor.rowcount == 0:
-            return {"hata": "Proje bulunamadı"}
-    otomatik_yedek_al("proje_sil")
-    return {"mesaj": "Proje silindi"}
-
-
-def istatistikler():
-    """Özet istatistikleri döndürür."""
-    with veritabani_baglantisi() as bag:
-        toplam = bag.execute("SELECT COUNT(*) FROM projeler").fetchone()[0]
-        aktif = bag.execute("SELECT COUNT(*) FROM projeler WHERE durum IN ('Aktif', 'Yarım Kaldı', 'Bitmedi ama çalışıyor')").fetchone()[0]
-        bitti = bag.execute("SELECT COUNT(*) FROM projeler WHERE durum='Bitti'").fetchone()[0]
-        bulut = bag.execute("SELECT COUNT(*) FROM projeler WHERE ide_turu='Bulut'").fetchone()[0]
-        benzersiz_ide = bag.execute("SELECT COUNT(DISTINCT ide_adi) FROM projeler WHERE ide_adi != ''").fetchone()[0]
-        benzersiz_hesap = bag.execute("SELECT COUNT(DISTINCT hesap_adi) FROM projeler WHERE hesap_adi != ''").fetchone()[0]
-
-    return {
-        "toplam": toplam, "aktif": aktif, "bitti": bitti, "bulut": bulut,
-        "lokal": toplam - bulut, "ide_sayisi": benzersiz_ide, "hesap_sayisi": benzersiz_hesap
-    }
-
-
-def otomatik_tamamla():
-    """Öneri listelerini birleştirir."""
-    with veritabani_baglantisi() as bag:
-        def get_set(sorgu): return {r[0] for r in bag.execute(sorgu).fetchall() if r[0]}
-
-        ideler = get_set("SELECT ide_adi FROM projeler") | get_set("SELECT ide_adi FROM tanimli_ideler")
-        hesaplar = get_set("SELECT hesap_adi FROM projeler") | get_set("SELECT hesap_adi FROM tanimli_hesaplar")
-        emailler = get_set("SELECT hesap_email FROM projeler") | get_set("SELECT hesap_email FROM tanimli_hesaplar")
-
-    return {
-        "ideler": sorted(ideler),
-        "hesaplar": sorted(hesaplar),
-        "emailler": sorted(emailler)
-    }
-
-
-def veritabani_durumu():
-    """Veritabanı sağlığını kontrol eder."""
-    try:
-        with veritabani_baglantisi() as bag:
-            return {
-                "status": "Healthy",
-                "counts": {
-                    "projeler": bag.execute("SELECT COUNT(*) FROM projeler").fetchone()[0],
-                    "ideler": bag.execute("SELECT COUNT(*) FROM tanimli_ideler").fetchone()[0],
-                    "hesaplar": bag.execute("SELECT COUNT(*) FROM tanimli_hesaplar").fetchone()[0]
-                }
-            }
-    except Exception as e:
-        return {"status": "Error", "message": str(e)}
-
-
-# ============================================================
-# TANIMLI IDE VE HESAP İŞLEMLERİ
-# ============================================================
-
-def tanimli_ide_listele():
-    with veritabani_baglantisi() as bag:
-        return [dict(r) for r in bag.execute("SELECT * FROM tanimli_ideler ORDER BY ide_adi").fetchall()]
-
-
-def tanimli_ide_ekle(veri):
-    with veritabani_baglantisi() as bag:
-        bag.execute("INSERT INTO tanimli_ideler (ide_adi, ide_turu, ide_url) VALUES (?,?,?)",
-                    (veri["ide_adi"], veri.get("ide_turu", "Lokal"), veri.get("ide_url", "")))
-        bag.commit()
-    otomatik_yedek_al("ide_ekle")
-
-
-def tanimli_ide_guncelle(tid, veri):
-    with veritabani_baglantisi() as bag:
-        bag.execute("UPDATE tanimli_ideler SET ide_adi=?, ide_turu=?, ide_url=? WHERE id=?",
-                    (veri["ide_adi"], veri.get("ide_turu", "Lokal"), veri.get("ide_url", ""), tid))
-        bag.commit()
-    otomatik_yedek_al("ide_guncelle")
-
-
-def tanimli_ide_sil(tid):
-    otomatik_yedek_al("ide_silmeden_once")
-    with veritabani_baglantisi() as bag:
-        cursor = bag.execute("DELETE FROM tanimli_ideler WHERE id=?", (tid,))
-        bag.commit()
-        if cursor.rowcount == 0:
-            return {"hata": "IDE bulunamadı"}
-    otomatik_yedek_al("ide_sil")
-    return {"mesaj": "IDE silindi"}
-
-
-def tanimli_hesap_listele():
-    with veritabani_baglantisi() as bag:
-        return [dict(r) for r in bag.execute("SELECT * FROM tanimli_hesaplar ORDER BY hesap_adi").fetchall()]
-
-
-def tanimli_hesap_ekle(veri):
-    with veritabani_baglantisi() as bag:
-        bag.execute("INSERT INTO tanimli_hesaplar (hesap_adi, hesap_email) VALUES (?,?)",
-                    (veri["hesap_adi"], veri.get("hesap_email", "")))
-        bag.commit()
-    otomatik_yedek_al("hesap_ekle")
-
-
-def tanimli_hesap_guncelle(tid, veri):
-    with veritabani_baglantisi() as bag:
-        bag.execute("UPDATE tanimli_hesaplar SET hesap_adi=?, hesap_email=? WHERE id=?",
-                    (veri["hesap_adi"], veri.get("hesap_email", ""), tid))
-        bag.commit()
-    otomatik_yedek_al("hesap_guncelle")
-
-
-def tanimli_hesap_sil(tid):
-    otomatik_yedek_al("hesap_silmeden_once")
-    with veritabani_baglantisi() as bag:
-        cursor = bag.execute("DELETE FROM tanimli_hesaplar WHERE id=?", (tid,))
-        bag.commit()
-        if cursor.rowcount == 0:
-            return {"hata": "Hesap bulunamadı"}
-    otomatik_yedek_al("hesap_sil")
-    return {"mesaj": "Hesap silindi"}
-
-
-# ============================================================
-# HTTP SUNUCU — İstekleri karşılar, API ve arayüz sunar
-# ============================================================
-
-class IdeYoneticiHandler(BaseHTTPRequestHandler):
-    """HTTP isteklerini karşılayan ve API uç noktalarını yöneten sunucu sınıfı."""
-
-    def log_message(self, format, *args):  # noqa: W0622
-        """Sunucu loglarını sessizleştir."""
-        pass
-
-    def _guvenlik_basliklari(self):
-        """Güvenlik başlıklarını ekler."""
-        headers = {
-            "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "SAMEORIGIN",
-            "X-XSS-Protection": "1; mode=block",
-            "Content-Security-Policy": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com; script-src 'self' 'unsafe-inline' https://accounts.google.com; frame-src https://accounts.google.com; connect-src 'self' https://identitytoolkit.googleapis.com;"
-        }
-        for k, v in headers.items():
-            self.send_header(k, v)
-
-    def _cache_engelleme_basliklari(self):
-        """Tarayıcının eski API cevaplarını göstermesini engeller."""
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
-
-    def _json_yanit(self, veri, durum=200):
-        """JSON yanıtı döner."""
-        self.send_response(durum)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self._cache_engelleme_basliklari()
-        self._guvenlik_basliklari()
-        self.end_headers()
-        self.wfile.write(json.dumps(veri, ensure_ascii=False).encode("utf-8"))
-
-    def _html_yanit(self, icerik):
-        """HTML yanıtı döner."""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self._cache_engelleme_basliklari()
-        self._guvenlik_basliklari()
-        self.end_headers()
-        self.wfile.write(icerik.encode("utf-8"))
-
-    def _govde_oku(self):
-        """İstek gövdesini okur."""
-        uzunluk = int(self.headers.get("Content-Length", 0))
-        if uzunluk < 0 or uzunluk > 10 * 1024 * 1024:
-            return {}
-        try:
-            govde = self.rfile.read(uzunluk).decode("utf-8")
-        except (OSError, ValueError):
-            return {}
-        try:
-            return json.loads(govde) if govde else {}
-        except (json.JSONDecodeError, ValueError):
-            return {}
-
-    def do_OPTIONS(self):
-        """CORS preflight."""
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self._cache_engelleme_basliklari()
-        self.end_headers()
-
-    def do_GET(self):
-        yol = urlparse(self.path).path
-        if yol == "/" or yol == "":
-            return self._html_yanit(ARAYUZ_HTML)
-
-        # Basit Router
-        routes = {
-            "/api/projeler": proje_listele,
-            "/api/istatistikler": istatistikler,
-            "/api/otomatik": otomatik_tamamla,
-            "/api/tanimli/ideler": tanimli_ide_listele,
-            "/api/tanimli/hesaplar": tanimli_hesap_listele,
-            "/api/diagnostic": lambda: {
-                "server": "Active",
-                "database": veritabani_durumu(),
-                "backups": yedek_durumu(),
-                "cloud": bulut_durumu(),
-                "environment": {"os": sys.platform, "python": sys.version}
-            },
-            "/api/bulut/durum": bulut_durumu,
-            "/api/export": self._export_verisi
-        }
-
-        if yol in routes:
-            self._json_yanit(routes[yol]())
-        else:
-            self._json_yanit({"hata": "Bulunamadı"}, 404)
-
-    def _export_verisi(self):
-        return {"meta": {"olusturma_zamani": datetime.now().isoformat(timespec="seconds")}, **tum_verileri_al()}
-
-    def do_POST(self):
-        yol = urlparse(self.path).path
-        veri = self._govde_oku()
-
-        if yol == "/api/kapat":
-            self._json_yanit({"mesaj": "Sunucu kapatma istegi alindi"})
-            threading.Thread(target=sunucuyu_kapat, daemon=True).start()
-            return
-
-        if yol == "/api/yedek-al":
-            yedek_yolu = otomatik_yedek_al("manuel")
-            return self._json_yanit({"mesaj": "Yedek alındı", "yedek": yedek_yolu, "durum": yedek_durumu()})
-
-        if yol == "/api/bulut/yedekle":
-            # Yavaş Firebase çağrısı ana thread'i bloklamasın — arka planda çalıştır
-            global GLOBAL_BULUT_SONUC
-            GLOBAL_BULUT_SONUC = {"durum": "Devam ediyor", "zaman": datetime.now().isoformat(timespec="seconds")}
-            threading.Thread(target=lambda: bulut_yedekle("manuel"), daemon=True).start()
-            return self._json_yanit({"durum": "Devam ediyor", "mesaj": "Bulut yedeklemesi arka planda başlatıldı"})
-
-        if yol == "/api/bulut/geri-yukle":
-            sonuc = buluttan_geri_yukle()
-            return self._json_yanit(sonuc, 200 if sonuc.get("ok") else 400)
-
-        if yol == "/api/auth/google":
-            sonuc = google_ile_firebase_giris(veri.get("credential", ""))
-            return self._json_yanit(sonuc, 200 if sonuc.get("ok") else 400)
-
-        if yol == "/api/auth/cikis":
-            return self._json_yanit(google_cikis())
-
-        if yol == "/api/projeler":
-            sonuc = proje_ekle(veri)
-            return self._json_yanit(sonuc, 200 if "hata" not in sonuc else 400)
-
-        if yol == "/api/tanimli/ideler":
-            tanimli_ide_ekle(veri)
-            return self._json_yanit({"mesaj": "IDE eklendi"})
-
-        if yol == "/api/tanimli/hesaplar":
-            tanimli_hesap_ekle(veri)
-            return self._json_yanit({"mesaj": "Hesap eklendi"})
-
-        if yol == "/api/import":
-            self._import_islemi(veri)
-            return self._json_yanit({"mesaj": "İçe aktarım tamamlandı"})
-
-        if yol == "/api/ac":
-            return self._klasor_ac(veri.get("yol", ""))
-
-        self._json_yanit({"hata": "Geçersiz"}, 404)
-
-    def _import_islemi(self, veri):
-        otomatik_yedek_al("ice_aktarma_oncesi")
-        yedek_verisini_veritabanina_yaz(veri)
-        otomatik_yedek_al("ice_aktarma")
-
-    def _klasor_ac(self, yol_str):
-        yol_str = (yol_str or "").strip().strip('"\'')  # Windows tırnak temizleme
-        if not yol_str:
-            return self._json_yanit({"hata": "Yol belirtilmedi"}, 400)
-        try:
-            gercek_yol = os.path.realpath(yol_str)
-        except (OSError, ValueError):
-            return self._json_yanit({"hata": "Geçersiz yol"}, 400)
-        # Executable dosya engeli — sadece dizin aç
-        uzanti = os.path.splitext(gercek_yol)[1].lower()
-        if uzanti in ('.exe', '.bat', '.cmd', '.ps1', '.vbs', '.js', '.jar', '.msi', '.com'):
-            return self._json_yanit({"hata": "Sadece dizin açılabilir, çalıştırılabilir dosya reddedildi"}, 400)
-        if not os.path.isdir(gercek_yol):
-            return self._json_yanit({"hata": "Yol bir dizin değil veya bulunamadı"}, 400)
-        try:
-            if sys.platform == 'win32': os.startfile(gercek_yol)
-            elif sys.platform == 'darwin': subprocess.call(['open', gercek_yol])
-            else: subprocess.call(['xdg-open', gercek_yol])
-            return self._json_yanit({"mesaj": "Dizin açıldı"})
-        except Exception as e:
-            return self._json_yanit({"hata": str(e)}, 500)
-
-    def do_PUT(self):
-        yol = urlparse(self.path).path
-        veri = self._govde_oku()
-        parcalar = yol.split("/")
-
-        try:
-            target_id = int(parcalar[-1])
-            if "/api/projeler/" in yol:
-                sonuc = proje_guncelle(target_id, veri)
-                return self._json_yanit(sonuc, 200 if "hata" not in sonuc else 400)
-            if "/api/tanimli/ideler/" in yol:
-                tanimli_ide_guncelle(target_id, veri)
-                return self._json_yanit({"mesaj": "IDE güncellendi"})
-            if "/api/tanimli/hesaplar/" in yol:
-                tanimli_hesap_guncelle(target_id, veri)
-                return self._json_yanit({"mesaj": "Hesap güncellendi"})
-        except (ValueError, IndexError):
-            pass
-
-        self._json_yanit({"hata": "Geçersiz"}, 404)
-
-    def do_DELETE(self):
-        yol = urlparse(self.path).path
-        parcalar = yol.split("/")
-
-        try:
-            target_id = int(parcalar[-1])
-            if "/api/projeler/" in yol:
-                sonuc = proje_sil(target_id)
-                return self._json_yanit(sonuc, 200 if "hata" not in sonuc else 404)
-            if "/api/tanimli/ideler/" in yol:
-                sonuc = tanimli_ide_sil(target_id)
-                return self._json_yanit(sonuc, 200 if "hata" not in sonuc else 404)
-            if "/api/tanimli/hesaplar/" in yol:
-                sonuc = tanimli_hesap_sil(target_id)
-                return self._json_yanit(sonuc, 200 if "hata" not in sonuc else 404)
-        except (ValueError, IndexError):
-            pass
-
-        self._json_yanit({"hata": "Geçersiz"}, 404)
-
-
-# ============================================================
-# GÖMÜLÜ HTML ARAYÜZÜ
-# Tüm HTML, CSS ve JavaScript kodu aşağıdaki string içindedir.
-# Tarayıcıda modern, koyu temalı tek sayfalık bir uygulama açılır.
-# ============================================================
-
-ARAYUZ_HTML = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>IDE Proje Takip Sistemi v2.5</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ===== SIFIRLAMA VE TEMA DEĞİŞKENLERİ ===== */
@@ -1227,8 +230,10 @@ mark{background:var(--yellow);color:#000;border-radius:2px;padding:0 2px}
 
 /* ===== MODAL ===== */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(10px);
-  display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+  display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;cursor:pointer}
+.overlay>.modal{cursor:default}
 .overlay.show{display:flex}
+body.modal-lock{overflow:hidden;touch-action:none}
 .modal{background:var(--bg-modal);border:1px solid var(--border);border-radius:18px;
   width:100%;max-width:560px;max-height:92vh;overflow-y:auto;
   box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:modalIn .3s ease}
@@ -1409,6 +414,9 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
   .stats{grid-template-columns:repeat(2,1fr);padding-bottom:15px}
   .ayar-add-row{flex-direction:column}
   .modal{border-radius:0;max-height:100vh}
+  .modal-body{padding:16px}
+  .modal-head{padding:16px}
+  .overlay{padding:30px}
 }
 </style>
 </head>
@@ -1428,6 +436,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     <button class="btn btn-icon" onclick="temaDegistir()" title="Temayı Değiştir" id="btn-tema">🌓</button>
     <button class="btn btn-ghost" onclick="ayarlarAc()">⚙ Ayarlar</button>
     <button class="btn btn-primary" onclick="modalAc()">+ Yeni Proje</button>
+    <button class="btn btn-primary" id="firebase-signin-btn" style="display:none">🔐 Google ile Giriş Yap</button>
   </div>
 </header>
 
@@ -1492,7 +501,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 </div>
 
 <!-- ===== PROJE EKLEME/DÜZENLEME MODAL ===== -->
-<div class="overlay" id="modal">
+<div class="overlay" id="modal" onclick="if(event.target===this)modalKapat()">
 <div class="modal">
   <div class="modal-head">
     <div style="display:flex;align-items:center;gap:10px">
@@ -1641,7 +650,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 </div>
 
 <!-- ===== SİLME ONAY MODAL ===== -->
-<div class="overlay" id="sil-modal">
+<div class="overlay" id="sil-modal" onclick="if(event.target===this)silKapat()">
 <div class="modal" style="max-width:420px">
   <div class="modal-head"><h2>⚠ Silme Onayı</h2>
     <button class="modal-close" onclick="silKapat()">&times;</button></div>
@@ -1656,7 +665,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 </div>
 
 <!-- ===== AYARLAR MODAL ===== -->
-<div class="overlay ayar-modal" id="ayar-modal">
+<div class="overlay ayar-modal" id="ayar-modal" onclick="if(event.target===this)ayarlarKapat()">
 <div class="modal">
   <div class="modal-head"><h2>⚙ IDE ve Hesap Yönetimi</h2>
     <button class="modal-close" onclick="ayarlarKapat()">&times;</button></div>
@@ -1689,25 +698,19 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
     </div>
     <!-- Yedekleme Bölümü -->
     <div class="ayar-sec" id="ayar-yedek">
-      <div style="padding:10px;text-align:center">
-        <p style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6">Her değişiklikten sonra otomatik yedek alınır. Buradan ayrıca elle yedek alabilir, JSON olarak indirebilir veya eski yedeği yükleyebilirsiniz.</p>
-        <button class="btn btn-primary" onclick="manuelYedekAl()">💾 Şimdi Yedekle</button>
-        <br><br>
-        <button class="btn btn-primary" onclick="disaAktar()">⬇ Yedeği İndir (Export)</button>
-        <br><br>
-        <button class="btn btn-primary" onclick="bulutaYedekle()">☁ Buluta Yedekle</button>
-        <br><br>
-        <button class="btn btn-ghost" onclick="buluttanGeriYukle()">☁ Buluttan Geri Yükle</button>
-        <br><br>
-        <div id="google-login-box" style="display:flex;justify-content:center;margin-bottom:14px"></div>
-        <button class="btn btn-ghost" id="google-cikis-btn" onclick="googleCikis()" style="display:none">Google Çıkış</button>
-        <br><br>
-        <div style="position:relative;display:inline-block">
-            <button class="btn btn-ghost">⬆ Yedek Yükle (Import)</button>
-            <input type="file" id="f-import" accept=".json" onchange="iceAktar(event)" style="opacity:0;position:absolute;inset:0;cursor:pointer" title="JSON yedeği seç">
+      <div style="padding:16px">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5">Verileriniz bulutla otomatik senkronizedir. Aşağıdan yedek alabilir veya yükleyebilirsiniz.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:16px">
+          <button class="btn btn-primary" onclick="disaAktar()">⬇ Yedek İndir</button>
+          <div style="position:relative;display:inline-block">
+            <button class="btn btn-ghost">⬆ Yedek Yükle</button>
+            <input type="file" id="f-import" accept=".json" onchange="iceAktar(event)" style="opacity:0;position:absolute;inset:0;cursor:pointer" title="Yedek dosyası seç">
+          </div>
         </div>
-        <div id="yedek-durum" style="font-size:12px;color:var(--text3);margin-top:16px"></div>
-        <div id="bulut-durum" style="font-size:12px;color:var(--text3);margin-top:8px"></div>
+        <div id="google-login-box" style="display:none"></div>
+        <button class="btn btn-ghost" id="google-cikis-btn" onclick="googleCikis()" style="display:none;margin-bottom:10px">Google Çıkış</button>
+        <div id="yedek-durum" style="font-size:12px;color:var(--text3);margin-bottom:4px;line-height:1.4"></div>
+        <div id="bulut-durum" style="font-size:12px;color:var(--text3);line-height:1.4"></div>
       </div>
     </div>
     <!-- Görünüm Bölümü -->
@@ -1862,7 +865,9 @@ async function _yukleImpl() {
     console.error('Yükleme hatası:', ilkHata.reason);
     Utils.bildirim('Veri yüklenemedi, tekrar deneniyor...', 'err');
   }
-  [App.projeler, App.oneriVeri, App.tanimliIdeler, App.tanimliHesaplar] = sonuclar.slice(0, 4).map(s => s.status === 'fulfilled' ? s.value : (s.status === 'fulfilled' ? s.value : []));
+  if (!window._listenerAktif) {
+    [App.projeler, App.oneriVeri, App.tanimliIdeler, App.tanimliHesaplar] = sonuclar.slice(0, 4).map(s => s.status === 'fulfilled' ? s.value : (s.status === 'fulfilled' ? s.value : []));
+  }
   // Eksik veriler için boş fallback
   if (!Array.isArray(App.projeler)) App.projeler = [];
   if (!App.oneriVeri || typeof App.oneriVeri !== 'object') App.oneriVeri = { ideler: [], hesaplar: [], emailler: [] };
@@ -1912,9 +917,14 @@ function goster() {
   elements.kanban.style.display = App.kanbanModu ? 'grid' : 'none';
 
   if (liste.length === 0) {
+    const hicProjeYok = App.projeler.length === 0;
     elements.kartlar.innerHTML = `<div class="empty" style="grid-column:1/-1">
-      <div class="empty-icon">📂</div>
-      <div class="empty-text">${App.projeler.length === 0 ? 'Henüz hiç proje eklenmemiş.' : 'Filtreye uygun proje bulunamadı.'}</div>
+      <div class="empty-icon" style="font-size:56px">${hicProjeYok ? '📂' : '🔍'}</div>
+      <div class="empty-text" style="font-size:16px;margin:8px 0 4px">${hicProjeYok ? 'Henüz hiç proje eklenmemiş' : 'Filtreye uygun proje bulunamadı'}</div>
+      ${hicProjeYok ? `
+        <button class="btn btn-primary" style="margin-top:16px" onclick="modalAc()">+ İlk Projeyi Ekle</button>
+        <p style="margin-top:18px;color:#888;font-size:12px;max-width:380px;line-height:1.5">☁️ <b>Cloud modu:</b> Veriler bu tarayıcının <code>localStorage</code>'ında saklanır. Farklı cihazdan erişirsen orada görünmez.</p>
+      ` : ''}
     </div>`;
     return;
   }
@@ -1987,7 +997,7 @@ function kartUret(p, ara) {
   // Kart üzeri renk popup
   const mevcutRenk = p.kart_rengi || '';
   const paletHtml = RENK_PALETI.map(r =>
-    `<button class="kart-renk-popup-btn ${r === mevcutRenk ? 'aktif' : ''}" style="background:${r}" title="${r}" onclick="kartRengiUygula(${p.id},'${r}',this)" type="button"></button>`
+    `<button class="kart-renk-popup-btn ${r === mevcutRenk ? 'aktif' : ''}" style="background:${r}" title="${r}" onclick="kartRengiUygula('${p.id}','${r}',this)" type="button"></button>`
   ).join('');
 
   // Not: 120 karakterden uzunsa kırp, "devamını oku" butonu ekle
@@ -2002,7 +1012,7 @@ function kartUret(p, ara) {
   }
 
   return `
-    <div class="card${p.kart_gorseli ? ' has-bg' : ''}" data-durum="${Utils.esc(p.durum || '')}" style="${renkDegiskeni}${borderStyle}" draggable="true" ondragstart="onDragStart(event, ${p.id})" ondragend="onDragEnd(event)" id="kart-${p.id}">
+    <div class="card${p.kart_gorseli ? ' has-bg' : ''}" data-durum="${Utils.esc(p.durum || '')}" style="${renkDegiskeni}${borderStyle}" draggable="true" ondragstart="onDragStart(event, '${p.id}')" ondragend="onDragEnd(event)" id="kart-${p.id}">
       ${bgGorsel}
       <div class="kart-overlay-ust"></div>
       <div class="kart-overlay-alt"></div>
@@ -2010,16 +1020,16 @@ function kartUret(p, ara) {
       <div class="kart-renk-popup" id="renk-popup-${p.id}">
         <div class="kart-renk-popup-palet">${paletHtml}</div>
         <div class="kart-renk-popup-alt">
-          <input type="color" value="${mevcutRenk || '#0ea5e9'}" title="Özel renk" onchange="kartRengiUygula(${p.id},this.value,null)">
-          <button class="kart-renk-popup-sifirla" onclick="kartRengiUygula(${p.id},'',null)" type="button">↺ Otomatik</button>
+          <input type="color" value="${mevcutRenk || '#0ea5e9'}" title="Özel renk" onchange="kartRengiUygula('${p.id}',this.value,null)">
+          <button class="kart-renk-popup-sifirla" onclick="kartRengiUygula('${p.id}','',null)" type="button">↺ Otomatik</button>
         </div>
       </div>
       <div class="card-actions-bar">
         ${acBtn}
         ${deployBtn}
-        <button class="btn-icon" onclick="hizliDurum(${p.id}, '${nextStatus}')" title="${nextStatus}">${archiveIcon}</button>
-        <button class="btn-icon edit" onclick="duzenle(${p.id})">✏️</button>
-        <button class="btn-icon danger" onclick="silOnay(${p.id}, '${Utils.esc(p.proje_adi).replace(/'/g, "&apos;")}')" title="Projeyi sil">🗑️</button>
+        <button class="btn-icon" onclick="hizliDurum('${p.id}', '${nextStatus}')" title="${nextStatus}">${archiveIcon}</button>
+        <button class="btn-icon edit" onclick="duzenle('${p.id}')">✏️</button>
+        <button class="btn-icon danger" onclick="silOnay('${p.id}', '${Utils.esc(p.proje_adi).replace(/'/g, "&apos;")}')" title="Projeyi sil">🗑️</button>
       </div>
       <div class="card-content">
         <div class="card-title">${Utils.highlight(p.proje_adi, ara)}</div>
@@ -2037,7 +1047,7 @@ function kartUret(p, ara) {
           <span class="card-date">🕐 ${Utils.esc((p.son_guncelleme || '').split(' ')[0])}</span>
         </div>
       </div>
-      <button class="kart-renk-btn" style="background:${mevcutRenk || 'rgba(128,128,128,0.35)'}" title="Renk değiştir" onclick="kartRenkPopupAc(event,${p.id})" type="button"></button>
+      <button class="kart-renk-btn" style="background:${mevcutRenk || 'rgba(128,128,128,0.35)'}" title="Renk değiştir" onclick="kartRenkPopupAc(event,'${p.id}')" type="button"></button>
     </div>`;
 }
 
@@ -2231,6 +1241,7 @@ function modalAc(id = null) {
     document.getElementById('btn-modal-sil').style.display = 'none';
   }
   App.el.modal.classList.add('show');
+  document.body.classList.add('modal-lock');
   turGuncelle();
   hizliIdeGoster();
   paletOlustur();
@@ -2244,7 +1255,10 @@ function turGuncelle() {
 }
 
 function duzenle(id) { modalAc(id); }
-function modalKapat() { App.el.modal.classList.remove('show'); }
+function modalKapat() {
+  App.el.modal.classList.remove('show');
+  document.body.classList.remove('modal-lock');
+}
 function modalSil() {
   const id = document.getElementById('f-id').value;
   const adi = document.getElementById('f-proje').value.trim() || 'Bu proje';
@@ -2314,15 +1328,20 @@ function silOnay(id, ad) {
     yukle();
   };
   document.getElementById('sil-modal').classList.add('show');
+  document.body.classList.add('modal-lock');
 }
 
-function silKapat() { document.getElementById('sil-modal').classList.remove('show'); }
+function silKapat() {
+  document.getElementById('sil-modal').classList.remove('show');
+  document.body.classList.remove('modal-lock');
+}
 
 /* ===============================================
    AYARLAR PANELİ
    =============================================== */
 async function ayarlarAc() {
   document.getElementById('ayar-modal').classList.add('show');
+  document.body.classList.add('modal-lock');
   // Açılışta sekme içeriklerine loading state göster
   ['ayar-ide-list', 'ayar-hesap-list', 'yedek-durum', 'bulut-durum'].forEach(id => {
     const el = document.getElementById(id);
@@ -2345,7 +1364,10 @@ async function ayarlarAc() {
   }
 }
 
-function ayarlarKapat() { document.getElementById('ayar-modal').classList.remove('show'); }
+function ayarlarKapat() {
+  document.getElementById('ayar-modal').classList.remove('show');
+  document.body.classList.remove('modal-lock');
+}
 
 function ayarSekme(idx) {
   document.querySelectorAll('.ayar-tab').forEach((t, i) => t.classList.toggle('active', i === idx));
@@ -2394,22 +1416,9 @@ function bulutDurumGoster(cloud) {
 }
 
 function googleButonHazirla(cloud) {
-  const kutu = document.getElementById('google-login-box');
+  // GIS butonu kullanılmıyor — firebase signInWithPopup kullanılır
   const cikis = document.getElementById('google-cikis-btn');
-  if (!kutu || !cikis) return;
-  cikis.style.display = cloud.giris_yapildi ? 'inline-flex' : 'none';
-  kutu.style.display = cloud.giris_yapildi ? 'none' : 'flex';
-  if (!cloud.google_giris_hazir) {
-    kutu.innerHTML = '<span style="font-size:12px;color:var(--text3)">Google giriş için Firebase Web API Key gerekli</span>';
-    return;
-  }
-  if (!window.google || kutu.dataset.ready === '1') return;
-  google.accounts.id.initialize({
-    client_id: cloud.google_client_id,
-    callback: googleGirisTamamlandi
-  });
-  google.accounts.id.renderButton(kutu, { theme: 'outline', size: 'large', text: 'signin_with', shape: 'rectangular' });
-  kutu.dataset.ready = '1';
+  if (cikis) cikis.style.display = cloud.giris_yapildi ? 'inline-flex' : 'none';
 }
 
 async function googleGirisTamamlandi(response) {
@@ -2791,12 +1800,28 @@ async function lokalAc(yol) {
 }
 
 async function disaAktar() {
-  const data = await Utils.api('/api/export');
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `ide_yedek_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
+  const cs = window.CloudShim;
+  if (cs && cs.auth && cs.auth.currentUser) {
+    Utils.bildirim('⬇ Yedek hazırlanıyor...');
+    const data = {
+      projeler: App.projeler || [],
+      tanimli_ideler: App.tanimliIdeler || [],
+      tanimli_hesaplar: App.tanimliHesaplar || []
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ide_yedek_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    Utils.bildirim('✅ Yedek indirildi');
+  } else {
+    const data = await Utils.api('/api/export');
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `ide_yedek_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+  }
 }
 
 async function manuelYedekAl() {
@@ -2810,25 +1835,33 @@ async function manuelYedekAl() {
 }
 
 async function bulutaYedekle() {
-  const sonuc = await Utils.api('/api/bulut/yedekle', 'POST', {});
-  const cloud = await Utils.api('/api/bulut/durum');
-  bulutDurumGoster(cloud);
-  if (sonuc.durum === 'Tamam' || sonuc.durum === 'Kısmi') {
-    Utils.bildirim('Bulut yedeği alındı');
-  } else {
-    Utils.bildirim('Bulut ayarı eksik veya bağlantı hatası', 'err');
+  try {
+    const sonuc = await Utils.api('/api/bulut/yedekle', 'POST', {});
+    const cloud = await Utils.api('/api/bulut/durum');
+    bulutDurumGoster(cloud);
+    if (sonuc.durum === 'Tamam' || sonuc.durum === 'Kısmi') {
+      Utils.bildirim('Bulut yedeği alındı');
+    } else {
+      Utils.bildirim('Bulut ayarı eksik veya bağlantı hatası', 'err');
+    }
+  } catch (e) {
+    Utils.bildirim('☁️ Verileriniz otomatik senkronize ediliyor, ayrıca yedekleme gerekmez', 'ok');
   }
 }
 
 async function buluttanGeriYukle() {
-  if (!confirm('Buluttaki son yedek yerel verilerin üzerine yazılacak. Devam edilsin mi?')) return;
-  const sonuc = await Utils.api('/api/bulut/geri-yukle', 'POST', {});
-  if (sonuc.ok) {
-    Utils.bildirim('Bulut yedeği geri yüklendi');
-    ayarVerileriYukle();
-    yukle();
-  } else {
-    Utils.bildirim('Buluttan geri yüklenemedi', 'err');
+  try {
+    if (!confirm('Buluttaki son yedek yerel verilerin üzerine yazılacak. Devam edilsin mi?')) return;
+    const sonuc = await Utils.api('/api/bulut/geri-yukle', 'POST', {});
+    if (sonuc.ok) {
+      Utils.bildirim('Bulut yedeği geri yüklendi');
+      ayarVerileriYukle();
+      yukle();
+    } else {
+      Utils.bildirim('Buluttan geri yüklenemedi', 'err');
+    }
+  } catch (e) {
+    Utils.bildirim('☁️ Bu özellik cloud modda kullanılamaz. Verileriniz otomatik senkronizedir.', 'ok');
   }
 }
 
@@ -2838,10 +1871,43 @@ async function iceAktar(e) {
   const reader = new FileReader();
   reader.onload = async (event) => {
     try {
-      await Utils.api('/api/import', 'POST', JSON.parse(event.target.result));
-      Utils.bildirim('Yükleme başarılı');
-      ayarlarKapat(); 
-      yukle();
+      const cs = window.CloudShim;
+      if (cs && cs.auth && cs.auth.currentUser) {
+        Utils.bildirim('☁️ Yükleniyor...');
+        const data = JSON.parse(event.target.result);
+        const uid = cs.auth.currentUser.uid;
+        const rootRef = cs.db.ref('users/' + uid);
+        if (!confirm('Mevcut tüm projeler, IDE\'ler ve hesaplar silinip yerine dosyadakiler yüklenecek. Devam edilsin mi?')) return;
+        Utils.bildirim('⏳ Veriler işleniyor...');
+        // Atomik set ile tüm veriyi değiştir (remove+push yerine)
+        const projelerObj = {};
+        if (Array.isArray(data.projeler)) {
+          const pRef = rootRef.child('projeler');
+          data.projeler.forEach(function(p) { delete p.id; projelerObj[pRef.push().key] = p; });
+          await pRef.set(projelerObj);
+        }
+        const ideler = data.tanimli_ideler || data.ideler || [];
+        if (Array.isArray(ideler) && ideler.length) {
+          const iRef = rootRef.child('ideler');
+          const idelerObj = {};
+          ideler.forEach(function(i) { delete i.id; idelerObj[iRef.push().key] = i; });
+          await iRef.set(idelerObj);
+        }
+        const hesaplar = data.tanimli_hesaplar || data.hesaplar || [];
+        if (Array.isArray(hesaplar) && hesaplar.length) {
+          const hRef = rootRef.child('hesaplar');
+          const hesaplarObj = {};
+          hesaplar.forEach(function(h) { delete h.id; hesaplarObj[hRef.push().key] = h; });
+          await hRef.set(hesaplarObj);
+        }
+        Utils.bildirim('✅ Yükleme tamam');
+        if (typeof yukle === 'function') yukle();
+      } else {
+        await Utils.api('/api/import', 'POST', JSON.parse(event.target.result));
+        Utils.bildirim('Yükleme başarılı');
+        ayarlarKapat();
+        yukle();
+      }
     } catch (err) { Utils.bildirim('Hata: Geçersiz dosya', 'err'); }
   };
   reader.readAsText(file);
@@ -2910,7 +1976,7 @@ document.addEventListener('keydown', e => {
 
 // Başlangıç
 temaKontrol();
-yukle();
+// yukle() çağrısı CloudShim tarafından yapılır (Utils.api override sonrası)
 
 // Uygulama arka planını localStorage'dan yükle
 (function() {
@@ -2924,64 +1990,315 @@ window.addEventListener('unload', () => {
   } catch (err) {}
 });
 </script>
+<script>
+/* ===== IDE Yönetici — Firebase Cloud Shim (inline) ===== */
+(function () {
+  'use strict';
+  if (typeof firebase === 'undefined') {
+    console.error('[CloudShim] Firebase SDK yüklenmedi');
+    return;
+  }
+  const firebaseConfig = {
+    apiKey: 'AIzaSyB4NKaunM5URtJJF2GQyk9TGsSGKR0YgMI',
+    authDomain: 'ideyonetici-em-2026.firebaseapp.com',
+    databaseURL: 'https://ideyonetici-em-2026-default-rtdb.europe-west1.firebasedatabase.app',
+    projectId: 'ideyonetici-em-2026',
+    storageBucket: 'ideyonetici-em-2026.firebasestorage.app',
+    messagingSenderId: '773072849647',
+    appId: '1:773072849647:web:d5c28e367bbb7f4770e91a'
+  };
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  } catch (e) { console.error('[CloudShim] init:', e); return; }
+  const auth = firebase.auth();
+  const db = firebase.database();
+  const GOOGLE_CLIENT_ID = '773072849647-b6v18o20bnjjr4phjuqmhf2p8kejcaqc.apps.googleusercontent.com';
+  const BACKEND_ONLY = ['/api/ac', '/api/yedek-al', '/api/yedekle', '/api/geri-yukle',
+    '/api/bulut/yedekle', '/api/bulut/geri-yukle', '/api/export', '/api/import'];
+  function apiToRtdbPath(yol, uid) {
+    let p = yol.replace(/^\/api\//, 'users/' + uid + '/');
+    p = p.replace('tanimli/', '');
+    return p;
+  }
+  function objeToArray(obj) {
+    if (!obj) return [];
+    return Object.keys(obj).map(function (k) { return Object.assign({}, obj[k], { id: k }); });
+  }
+  window._listenerAktif = false;
+  function realtimeDinle() {
+    if (window._listenerAktif) return;
+    const user = auth.currentUser;
+    if (!user) return;
+    const uid = user.uid;
+    db.ref('users/' + uid).on('value', function (snap) {
+      const data = snap.val() || {};
+      App.projeler = data.projeler ? objeToArray(data.projeler) : [];
+      App.tanimliIdeler = data.ideler ? objeToArray(data.ideler) : [];
+      App.tanimliHesaplar = data.hesaplar ? objeToArray(data.hesaplar) : [];
+      if (typeof yukle === 'function') yukle();
+    });
+    window._listenerAktif = true;
+  }
+  function realtimeDurdur() {
+    if (!window._listenerAktif) return;
+    const user = auth.currentUser;
+    if (user) db.ref('users/' + user.uid).off();
+    window._listenerAktif = false;
+  }
+  function istatistikHesapla() {
+    const aktifMi = function (p) {
+      const d = String(p.durum || '');
+      return d === 'Aktif' || d === 'Yarım Kaldı' || d === 'Bitmedi ama çalışıyor';
+    };
+    return {
+      toplam: App.projeler.length,
+      aktif: App.projeler.filter(aktifMi).length,
+      bitti: App.projeler.filter(function (p) { return p.durum === 'Bitti'; }).length,
+      bulut: App.projeler.filter(function (p) { return p.ide_turu === 'Bulut'; }).length,
+      ide_sayisi: App.tanimliIdeler.length,
+      hesap_sayisi: App.tanimliHesaplar.length
+    };
+  }
+  function firebaseUserToProfile(u) {
+    return { email: u.email, ad: u.displayName, resim: u.photoURL, sub: u.uid, uid: u.uid };
+  }
+  Utils.api = async function (yol, metod, veri) {
+    metod = metod || 'GET';
+    if (yol === '/api/auth/google' && metod === 'POST') {
+      const u = auth.currentUser;
+      if (!u) throw new Error('Firebase auth başarısız');
+      return { ok: true, kullanici: firebaseUserToProfile(u), mod: 'firebase-rtdb' };
+    }
+    if (yol === '/api/auth/cikis' && metod === 'POST') {
+      try { await auth.signOut(); } catch (e) { console.error(e); }
+      return { ok: true };
+    }
+    if (yol === '/api/bulut/durum' && metod === 'GET') {
+      const u = auth.currentUser;
+      return {
+        giris_yapildi: !!u,
+        kullanici: u ? firebaseUserToProfile(u) : null,
+        mod: 'firebase-rtdb',
+        google_giris_hazir: true,
+        google_client_id: GOOGLE_CLIENT_ID,
+        bulut_aktif: true,
+        aktif: !!u,
+        hazir: !!u
+      };
+    }
+    if (yol === '/api/istatistikler' && metod === 'GET') return istatistikHesapla();
+    if (yol === '/api/otomatik' && metod === 'GET') return { ideler: [], hesaplar: [], emailler: [] };
+    if (yol === '/api/diagnostic' && metod === 'GET') {
+      const u = auth.currentUser;
+      return {
+        mod: 'firebase-rtdb',
+        kullanici: u ? u.email : null,
+        cloud: {
+          giris_yapildi: !!u,
+          kullanici: u ? firebaseUserToProfile(u) : null,
+          aktif: !!u,
+          hazir: !!u,
+          mod: 'firebase-rtdb',
+          google_giris_hazir: true,
+          google_client_id: GOOGLE_CLIENT_ID,
+          kok_yol: 'ide_yonetici'
+        }
+      };
+    }
+    if (BACKEND_ONLY.some(function (p) { return yol === p; })) {
+      throw new Error('Bu özellik cloud modda kullanılamaz: ' + yol);
+    }
+    const user = auth.currentUser;
+    if (!user) {
+      Utils.bildirim('☁️ Lütfen önce Google ile giriş yapın', 'err');
+      if (metod === 'GET') return [];
+      throw new Error('Giriş yapılmamış');
+    }
+    const uid = user.uid;
+    const rtdbPath = apiToRtdbPath(yol, uid);
+    const ref = db.ref(rtdbPath);
+    if (metod === 'GET') {
+      // Listener bağlıysa, App.projeler/tanimliIdeler/tanimliHesaplar cache'inden dön
+      // (race condition ve gereksiz okuma önlemi)
+      if (window._listenerAktif && typeof App !== 'undefined') {
+        if (yol === '/api/projeler' && Array.isArray(App.projeler)) return App.projeler;
+        if (yol === '/api/tanimli/ideler' && Array.isArray(App.tanimliIdeler)) return App.tanimliIdeler;
+        if (yol === '/api/tanimli/hesaplar' && Array.isArray(App.tanimliHesaplar)) return App.tanimliHesaplar;
+      }
+      const snap = await ref.once('value');
+      const v = snap.val();
+      return v === null ? [] : objeToArray(v);
+    }
+    if (metod === 'POST') {
+      const newRef = await ref.push(veri);
+      const yeni = Object.assign({}, veri, { id: newRef.key, olusturma_tarihi: new Date().toISOString() });
+      if (typeof App !== 'undefined' && Array.isArray(App.projeler)) App.projeler.push(yeni);
+      if (typeof yukle === 'function') yukle();
+      return yeni;
+    }
+    if (metod === 'PUT') {
+      await ref.update(Object.assign({}, veri, { guncelleme_tarihi: new Date().toISOString() }));
+      const id = yol.split('/').pop();
+      const idx = typeof App !== 'undefined' ? (App.projeler || []).findIndex(x => x.id === id) : -1;
+      if (idx !== -1) App.projeler[idx] = Object.assign({}, App.projeler[idx], veri, { guncelleme_tarihi: new Date().toISOString() });
+      if (typeof yukle === 'function') yukle();
+      return Object.assign({ id: id }, veri);
+    }
+    if (metod === 'DELETE') {
+      await ref.remove();
+      const id = yol.split('/').pop();
+      const idx = typeof App !== 'undefined' ? (App.projeler || []).findIndex(x => x.id === id) : -1;
+      if (idx !== -1) App.projeler.splice(idx, 1);
+      if (typeof yukle === 'function') yukle();
+      return { ok: true, id: id };
+    }
+    throw new Error('RTDB shim: metod tanımsız: ' + metod);
+  };
+  const _origCallback = window.googleGirisTamamlandi;
+  window.googleGirisTamamlandi = async function (response) {
+    try {
+      if (response && response.credential) {
+        const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
+        await auth.signInWithCredential(credential);
+        Utils.bildirim('☁️ Buluta bağlandı', 'ok');
+        return;
+      }
+    } catch (e) {
+      console.error('Firebase auth hatası:', e);
+      Utils.bildirim('Giriş başarısız: ' + e.message, 'err');
+    }
+    if (typeof _origCallback === 'function') return _origCallback.apply(this, arguments);
+  };
+  auth.onAuthStateChanged(function (user) {
+    guncelleSignInBtn(user);
+    if (user) {
+      realtimeDinle();
+      if (typeof yukle === 'function') yukle();
+      if (typeof bulutDurumGoster === 'function') {
+        bulutDurumGoster({
+          giris_yapildi: true, kullanici: firebaseUserToProfile(user), mod: 'firebase-rtdb',
+          google_giris_hazir: true, google_client_id: GOOGLE_CLIENT_ID,
+          aktif: true, hazir: true
+        });
+      }
+    } else {
+      realtimeDurdur();
+      App.projeler = []; App.tanimliIdeler = []; App.tanimliHesaplar = [];
+      if (typeof yukle === 'function') yukle();
+      if (typeof bulutDurumGoster === 'function') {
+        bulutDurumGoster({
+          giris_yapildi: false, kullanici: null, mod: 'firebase-rtdb',
+          google_giris_hazir: true, google_client_id: GOOGLE_CLIENT_ID,
+          aktif: false, hazir: false
+        });
+      }
+    }
+  });
+  function guncelleSignInBtn(user) {
+    const fbBtn = document.getElementById('firebase-signin-btn');
+    if (!fbBtn) return;
+    if (user) {
+      fbBtn.style.display = 'inline-flex';
+      fbBtn.disabled = false;
+      fbBtn.innerHTML = '<span style="font-size:18px">✅</span> Bağlandı - Çıkış Yap (' + (user.email || '') + ')';
+      fbBtn.onclick = async function () {
+        try { await auth.signOut(); } catch (e) { console.error(e); }
+      };
+    } else {
+      fbBtn.style.display = 'inline-flex';
+      fbBtn.disabled = false;
+      fbBtn.innerHTML = '<span style="font-size:18px">🔐</span> Google ile Giriş Yap';
+      fbBtn.onclick = async function () {
+        try {
+          fbBtn.disabled = true;
+          fbBtn.textContent = 'Giriş yapılıyor...';
+          const provider = new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithPopup(provider);
+        } catch (e) {
+          console.error('signInWithPopup hata:', e);
+          if (typeof Utils !== 'undefined' && Utils.bildirim) {
+            Utils.bildirim('Giriş başarısız: ' + (e.message || e.code || 'bilinmeyen'), 'err');
+          }
+          fbBtn.disabled = false;
+          fbBtn.innerHTML = '<span style="font-size:18px">🔐</span> Google ile Giriş Yap';
+        }
+      };
+    }
+  }
+  if (typeof window.cikisYap === 'function') {
+    const _orig = window.cikisYap;
+    window.cikisYap = async function () {
+      try { await auth.signOut(); } catch (e) { console.error(e); }
+      return _orig.apply(this, arguments);
+    };
+  }
+  // Mevcut kodun onclick'leri Python backend'in inject ettiği global değişkenlere
+  // bağımlı (örn. ac(Ou9gvQBAlruJBvzRSFY)). Cloud modda bu değişkenler yok.
+  // Çözüm: identifier argümanlarını string literal'a çevir.
+  function fixOnclickString(code) {
+    return code
+      .replace(/(ac|duzenle|silOnay|modalSil|kartDuzenle|ayarAc|kapatAyar|kartRengiUygula|kartRenkPopupAc|hizliDurum|onDragStart|onDragEnd|notToggle|ayarKaydet)\((\w+)/g, "$1('$2'")
+      .replace(/,\s*(\w+)\)/g, ", '$1')")
+      .replace(/,\s*(\w+)\s*\)/g, ", '$1')");
+  }
+  function fixOnclickIdentifiers(root) {
+    const sel = (root && root.querySelectorAll) ? root.querySelectorAll('[onclick]:not([data-cf-fixed]),[onchange]:not([data-cf-fixed]),[ondragstart]:not([data-cf-fixed])') : [];
+    sel.forEach(function (el) {
+      ['onclick', 'onchange', 'ondragstart'].forEach(function (attr) {
+        const orig = el.getAttribute(attr);
+        if (!orig) return;
+        // Zaten tırnak içeriyorsa (string literal) atla
+        if (/['"`]/.test(orig)) { el.setAttribute('data-cf-fixed', '1'); return; }
+        const fixed = fixOnclickString(orig);
+        if (fixed !== orig) el.setAttribute(attr, fixed);
+      });
+      el.setAttribute('data-cf-fixed', '1');
+    });
+  }
+  function gizleBackendOnly() {
+    const sel = ['#btn-yedek-al', '#btn-bulut-yedekle', '#btn-bulut-geri-yukle',
+      '#btn-aksiyon-ac', '#btn-export', '#btn-import'];
+    sel.forEach(function (s) {
+      const el = document.querySelector(s);
+      if (el) el.style.display = 'none';
+    });
+    document.querySelectorAll('[data-aksiyon="ac"], [data-aksiyon="yedek-al"], [data-aksiyon="bulut-yedekle"], [data-aksiyon="bulut-geri-yukle"]').forEach(function (el) {
+      el.style.display = 'none';
+    });
+    document.querySelectorAll('button[onclick^="ac("], a[onclick^="ac("], button[onclick^="manuelYedekAl"], button[onclick^="bulutaYedekle"], button[onclick^="buluttanGeriYukle"]').forEach(function (el) {
+      el.style.display = 'none';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      gizleBackendOnly();
+      guncelleSignInBtn(auth.currentUser);
+      fixOnclickIdentifiers(document);
+    }, 200);
+    // Periyodik onclick fix (MutationObserver kaçırırsa) — 250ms agresif
+    setInterval(function () { fixOnclickIdentifiers(document); }, 250);
+    // Modal açılışlarında backend-only butonları gizle (Yedekleme sekmesi)
+    // ve yeni eklenen onclick'leri düzelt
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) {
+        m.addedNodes.forEach(function (n) {
+          if (n.nodeType === 1) {
+            if (n.matches && n.matches('.show, [style*="display: block"], [style*="display:block"]')) gizleBackendOnly();
+            if (n.querySelectorAll) {
+              fixOnclickIdentifiers(n);
+            }
+          }
+        });
+        if (m.type === 'attributes' && m.attributeName === 'class') {
+          gizleBackendOnly();
+        }
+      });
+    }).observe(document.body, { subtree: true, attributes: true, childList: true, attributeFilter: ['class', 'style'] });
+    if (typeof yukle === 'function') yukle();
+  });
+  window.CloudShim = { auth: auth, db: db, realtimeDinle: realtimeDinle, istatistikHesapla: istatistikHesapla };
+  console.log('[CloudShim] yüklendi, RTDB + Auth aktif');
+})();
+</script>
 </body>
-</html>"""
-
-
-def sunucuyu_kapat():
-    """Arka planda çalışan HTTP sunucusunu güvenli biçimde kapatır."""
-    if GLOBAL_SUNUCU is not None:
-        GLOBAL_SUNUCU.shutdown()
-
-
-# ============================================================
-# ANA GİRİŞ NOKTASI — Sunucuyu başlat ve tarayıcıyı aç
-# ============================================================
-
-if __name__ == "__main__":
-    # Açılışta DB'yi kontrol et, gerekiyorsa son yedekten toparla.
-    veritabani_kurtarmayi_dene()
-    tablolari_olustur()
-    otomatik_yedek_al("acilis")
-
-    port = SUNUCU_PORT
-    sunucu = None
-
-    # Port meşgulse bir sonrakini dene (en fazla 10 deneme)
-    for deneme in range(10):
-        try:
-            sunucu = HTTPServer(("127.0.0.1", port), IdeYoneticiHandler)
-            break
-        except OSError:
-            print(f"  Port {port} meşgul, {port + 1} deneniyor...")
-            port += 1
-
-    if sunucu is None:
-        print("  Uygun port bulunamadı!")
-        # .pyw konsolsuz çalışır — input() takılır. 3 sn bekle ve çık.
-        try:
-            import time
-            time.sleep(3)
-        except Exception:
-            pass
-        sys.exit(1)
-
-    url = f"http://127.0.0.1:{port}"
-    tarayici_url = f"{url}/?v={datetime.now().strftime('%Y%m%d%H%M%S')}"
-    GLOBAL_SUNUCU = sunucu
-    print("=" * 55)
-    print("   IDE Proje Takip Sistemi başlatıldı!")
-    print(f"   Adres: {url}")
-    print("   Kapatmak için: Ctrl+C veya bu pencereyi kapatın")
-    print("=" * 55)
-
-    # Tarayıcıyı kısa bir gecikmeyle aç (sunucunun hazır olmasını bekle)
-    threading.Timer(0.5, lambda: webbrowser.open(tarayici_url)).start()
-
-    try:
-        sunucu.serve_forever()
-    except KeyboardInterrupt:
-        print("\n  Sunucu kapatılıyor...")
-        sunucu.shutdown()
-
-
+</html>

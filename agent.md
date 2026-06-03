@@ -70,4 +70,4 @@ lokal_yol, deploy_url, kart_rengi, kart_gorseli
 - **Port Çakışması:** Sunucu `8888` meşgulse otomatik olarak portu artırır.
 - **Büyük Görseller:** `kart_gorseli` Base64 olarak DB'de saklanır. 500KB görsel ~670KB yer kaplar. Çok sayıda büyük görselli proje DB boyutunu artırır.
 - **Tarayıcı Kapanınca:** `beforeunload` event'i `navigator.sendBeacon('/api/kapat')` çağırır, Python süreci kapanır.
-- **`firebase_ayarlar.json`:** Gerçek API key içerir, asla commit etme.
+- **`firebase_ayarlar.json`:** Gerçek API key içerir, asla commit etme. Firebase Console'da **Authorized domains** listesini sıkılaştır (sadece `localhost` ve gerekiyorsa gerçek domain) — domain kısıtlaması olmadan API key kötüye kullanılabilir.

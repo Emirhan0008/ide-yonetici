@@ -4,3 +4,7 @@
 __pycache__/
 firebase_ayarlar.json
 yedekler/
+ide_yonetici_son_yedek.json
+dist/
+build/
+.kiro/
