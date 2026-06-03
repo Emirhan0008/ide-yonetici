@@ -2124,6 +2124,14 @@ window.addEventListener('unload', () => {
     if (e.code === 'auth/null-user' || e.code === 'auth/no-auth-event') return;
     console.error('[Shim] getRedirectResult:', e.code, e.message);
   });
+  function removeDropdown() {
+    var el = document.getElementById('firebase-signin-btn');
+    if (el && el._dropdown && el._dropdown.parentNode) {
+      el._dropdown.parentNode.removeChild(el._dropdown);
+    }
+    if (el) el._dropdown = null;
+    console.log('[SIGNIN-BTN] removeDropdown çalıştı, eski dropdown DOM\'dan kaldırıldı');
+  }
   function guncelleSignInBtn(user) {
     console.log('[SIGNIN-BTN] guncelleSignInBtn çağrıldı, user =', user ? user.email : 'null');
     var el = document.getElementById('firebase-signin-btn');
@@ -2207,11 +2215,7 @@ window.addEventListener('unload', () => {
       el.innerHTML = '<span style="font-size:16px;opacity:.5">?</span>';
       el.style.fontWeight = '400';
       el.style.fontSize = '13px';
-      if (typeof removeDropdown === 'function') {
-        removeDropdown();
-      } else if (el._dropdown) {
-        el._dropdown.style.display = 'none';
-      }
+      removeDropdown();
       el.title = 'Google ile Giriş Yap';
       var signIn = function () {
         el.style.opacity = '.4';
