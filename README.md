@@ -38,7 +38,6 @@ Eğer Python yüklü değilse veya terminalle uğraşmak istemiyorsanız:
 
 Uygulama tescilli bir **Antigravity Kit** projesidir.
 
-*   **Test Etme:** `python PROJE_TEST_SUITE.py` komutuyla backend sağlığını kontrol edebilirsiniz.
 *   **Build Alma:** Kendi .exe dosyanızı oluşturmak için:
     ```bash
     pyinstaller --onefile --name "IDE_Yonetici" --clean ide_yonetici.py
