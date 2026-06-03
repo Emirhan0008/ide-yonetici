@@ -679,6 +679,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
         </div>
         <div id="yedek-durum" style="font-size:12px;color:var(--text3);margin-bottom:4px;line-height:1.4"></div>
         <div id="bulut-durum" style="font-size:12px;color:var(--text3);line-height:1.4"></div>
+        <button class="btn btn-ghost" id="yedek-cikis-btn" style="display:none;margin-top:12px">🚪 Çıkış Yap</button>
       </div>
     </div>
     <!-- Görünüm Bölümü -->
@@ -1344,15 +1345,29 @@ async function googleGirisTamamlandi(response) {
 }
 
 async function googleCikis() {
-  await Utils.api('/api/auth/cikis', 'POST', {});
+  console.log('[CIKIS] googleCikis çağrıldı');
+  try {
+    if (window.firebase && firebase.auth) {
+      console.log('[CIKIS] Firebase signOut deneniyor');
+      await firebase.auth().signOut();
+      console.log('[CIKIS] Firebase signOut başarılı');
+    } else {
+      console.log('[CIKIS] Firebase yok, Utils.api deneniyor');
+      await Utils.api('/api/auth/cikis', 'POST', {});
+    }
+  } catch (e) {
+    console.error('[CIKIS] Hata:', e);
+  }
   const kutu = document.getElementById('google-login-box');
   if (kutu) {
     kutu.innerHTML = '';
     kutu.dataset.ready = '0';
   }
+  const yedekCikisBtn = document.getElementById('yedek-cikis-btn');
+  if (yedekCikisBtn) yedekCikisBtn.style.display = 'none';
   const cloud = await Utils.api('/api/bulut/durum');
   bulutDurumGoster(cloud);
-  Utils.bildirim('Google çıkışı yapıldı');
+  Utils.bildirim('Çıkış yapıldı');
 }
 
 function ayarListGoster(tip) {
@@ -2075,6 +2090,7 @@ window.addEventListener('unload', () => {
     if (typeof _origCallback === 'function') return _origCallback.apply(this, arguments);
   };
   auth.onAuthStateChanged(function (user) {
+    console.log('[AUTH] onAuthStateChanged tetiklendi, user =', user ? user.email : 'null');
     guncelleSignInBtn(user);
     if (user) {
       realtimeDinle();
@@ -2109,15 +2125,32 @@ window.addEventListener('unload', () => {
     console.error('[Shim] getRedirectResult:', e.code, e.message);
   });
   function guncelleSignInBtn(user) {
+    console.log('[SIGNIN-BTN] guncelleSignInBtn çağrıldı, user =', user ? user.email : 'null');
     var el = document.getElementById('firebase-signin-btn');
-    if (!el) return;
+    if (!el) { console.warn('[SIGNIN-BTN] #firebase-signin-btn bulunamadı'); return; }
     var yedekPrompt = document.getElementById('yedek-auth-prompt');
     var yedekBtn = document.getElementById('yedek-auth-btn');
     var dropdownGizle = function () {
-      if (el._dropdown) el._dropdown.style.display = 'none';
+      if (el._dropdown) {
+        el._dropdown.style.display = 'none';
+        console.log('[SIGNIN-BTN] dropdown dış tıklama ile gizlendi');
+      }
     };
     if (user) {
+      console.log('[SIGNIN-BTN] user var:', user.email, 'photoURL:', user.photoURL || 'yok');
       if (yedekPrompt) yedekPrompt.style.display = 'none';
+      var yedekCikisBtn = document.getElementById('yedek-cikis-btn');
+      if (yedekCikisBtn) {
+        yedekCikisBtn.style.display = 'inline-flex';
+        yedekCikisBtn.onclick = function (e) {
+          e.preventDefault();
+          console.log('[YEDEK-CIKIS] yedek-cikis-btn tıklandı, googleCikis çağrılıyor');
+          googleCikis();
+        };
+        console.log('[SIGNIN-BTN] yedek-cikis-btn gösterildi ve onclick atandı');
+      } else {
+        console.warn('[SIGNIN-BTN] #yedek-cikis-btn bulunamadı');
+      }
       el.style.display = 'inline-flex';
       if (user.photoURL) {
         el.innerHTML = '<img src="' + user.photoURL + '" alt="" referrerpolicy="no-referrer">';
@@ -2125,16 +2158,23 @@ window.addEventListener('unload', () => {
         el.innerHTML = user.email ? user.email[0].toUpperCase() : '?';
       }
       if (!el._dropdown) {
+        console.log('[SIGNIN-BTN] dropdown ilk kez oluşturuluyor');
         var dd = document.createElement('div');
         dd.className = 'avatar-dropdown';
         dd.style.display = 'none';
         dd.innerHTML = '<div class="ad-header">' + (user.email || '') + '</div><div class="ad-item" data-action="signout">🚪 Çıkış Yap</div>';
         dd.addEventListener('click', function (e) {
+          console.log('[SIGNIN-BTN] dropdown item tıklandı:', e.target);
           var item = e.target.closest('.ad-item');
           if (!item) return;
           if (item.dataset.action === 'signout') {
+            console.log('[SIGNIN-BTN] Çıkış Yap tıklandı, auth.signOut() çağrılıyor');
             dd.style.display = 'none';
-            auth.signOut().catch(function (e) { console.error(e); });
+            auth.signOut().then(function () {
+              console.log('[SIGNIN-BTN] auth.signOut() başarılı');
+            }).catch(function (e) {
+              console.error('[SIGNIN-BTN] auth.signOut() hatası:', e);
+            });
           }
         });
         el.appendChild(dd);
@@ -2142,7 +2182,9 @@ window.addEventListener('unload', () => {
         document.addEventListener('click', function (e) {
           if (!el.contains(e.target)) dropdownGizle();
         });
+        console.log('[SIGNIN-BTN] dropdown DOM\'a eklendi, display:', dd.style.display);
       } else {
+        console.log('[SIGNIN-BTN] dropdown zaten var, header güncelleniyor');
         el._dropdown.querySelector('.ad-header').textContent = user.email || '';
         el._dropdown.style.display = 'none';
       }
@@ -2150,11 +2192,17 @@ window.addEventListener('unload', () => {
       el.onclick = function (e) {
         e.stopPropagation();
         var dd = el._dropdown;
+        console.log('[SIGNIN-BTN] avatar onclick, _dropdown var mı:', !!dd, 'mevcut display:', dd ? dd.style.display : '-');
         if (!dd) return;
-        dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+        var yeni = dd.style.display === 'block' ? 'none' : 'block';
+        dd.style.display = yeni;
+        console.log('[SIGNIN-BTN] dropdown yeni display:', yeni, 'z-index:', getComputedStyle(dd).zIndex);
       };
+      console.log('[SIGNIN-BTN] el.onclick atandı');
     } else {
       if (yedekPrompt) yedekPrompt.style.display = 'block';
+      var yedekCikisBtn2 = document.getElementById('yedek-cikis-btn');
+      if (yedekCikisBtn2) yedekCikisBtn2.style.display = 'none';
       el.style.display = 'inline-flex';
       el.innerHTML = '<span style="font-size:16px;opacity:.5">?</span>';
       el.style.fontWeight = '400';
