@@ -3,7 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>IDE Proje Takip Sistemi v2.5</title>
+<script>
+(function(){
+  var V = 'v=20260603-2';
+  if (location.search.indexOf(V) === -1) {
+    var sep = location.search ? '&' : '?';
+    location.replace(location.pathname + location.search + sep + V + location.hash);
+  }
+})();
+</script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -2169,18 +2181,16 @@ window.addEventListener('unload', () => {
         console.log('[SIGNIN-BTN] dropdown ilk kez oluşturuluyor');
         var dd = document.createElement('div');
         dd.className = 'avatar-dropdown';
-        dd.style.display = 'none';
-        dd.style.position = 'fixed';
-        dd.style.zIndex = '10000';
+        dd.style.cssText = 'display:none;position:fixed;z-index:10000;flex-direction:column';
         var headerRow = document.createElement('div');
         headerRow.className = 'ad-header';
         headerRow.textContent = user.email || '';
-        headerRow.style.cssText = 'display:block;min-height:34px;line-height:14px;padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box';
+        headerRow.style.cssText = 'display:block;min-height:34px;line-height:14px;padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;width:100%';
         var itemRow = document.createElement('div');
         itemRow.className = 'ad-item';
         itemRow.dataset.action = 'signout';
         itemRow.textContent = '🚪 Çıkış Yap';
-        itemRow.style.cssText = 'display:flex;min-height:35px;line-height:15px;padding:10px 14px;font-size:13px;color:var(--text);cursor:pointer;align-items:center;gap:8px;box-sizing:border-box';
+        itemRow.style.cssText = 'display:flex;min-height:35px;line-height:15px;padding:10px 14px;font-size:13px;color:var(--text);cursor:pointer;align-items:center;gap:8px;box-sizing:border-box;width:100%';
         dd.appendChild(headerRow);
         dd.appendChild(itemRow);
         dd.addEventListener('click', function (e) {
