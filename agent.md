@@ -7,8 +7,10 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 
 ## 🛠️ Teknik Mimari ve Temel Prensip
 - **EN BÜYÜK ÖNCELİK:** Uygulama tek bir `.pyw` dosyası çalıştırılarak (Self-contained) ayağa kalkmalıdır. Tüm HTML, CSS ve JS kodları bu dosya içinde gömülü (inline) kalmaya devam etmelidir.
-- **Kütüphane Kullanımı:** Proje modern kütüphanelere (FastAPI, Flask, SQLAlchemy vb.) açıktır ancak bu paketler `requirements.txt` dosyasında listelenmelidir.
+- **Kütüphane Kullanımı:** Yalnızca Python standart kütüphanesi kullanılır (`http.server`, `sqlite3`, `zlib`, `base64`, `webbrowser`, vb.). UI kütüphaneleri CDN üzerinden yüklenebilir (örn. Firebase SDK).
 - **Frontend Gelişimi:** UI kütüphaneleri kullanılabilir, fakat nihai çıktı (bundle) Python dosyası içine gömülerek "tek dosya ile çalıştırma" özelliği korunmalıdır.
+- **Public Build:** `public/index.html` ayrıca Firebase Hosting üzerinden yayınlanır (kullanıcı girişi ile).
+- **Cloud Run:** `cloudrun/` altında Python backend'in konteynerleştirilmiş versiyonu bulunur (opsiyonel, aynı kodu çalıştırır).
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
 
@@ -48,26 +50,35 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - Paneller birbirini kapatır (aynı anda ikisi açık olamaz).
 - `hizliIdeKapat()` ve `hizliHesapKapat()` `modalAc()` içinde çağrılır.
 
-## 📂 Önemli Dosyalar ve Konumlar
-- `ide_yonetici.pyw`: Tüm uygulama (Backend + Frontend) buradadır.
-- `ide_yonetici.db`: SQLite veritabanı (script ile aynı dizinde).
-- `firebase_ayarlar.json`: Firebase/Google yapılandırması — `.gitignore`'da, commit etme!
-- `dist/IDE_Yonetici.exe`: PyInstaller ile üretilen taşınabilir sürüm.
+### Kimlik Doğrulama (V2.5 Hosting)
+- `public/index.html` shim'i Firebase Auth (Google Sign-In popup) kullanır.
+- Kullanıcının `uid`'si Realtime Database'de `users/$uid` path'inde izole edilir (bkz. `database.rules.json`).
+- `firebase_ayarlar.json` **artık kullanılmıyor** (legacy dosya, shim hardcode edilmiş). İleride runtime config gerekirse shim'e taşınmalı.
 
-## �️ Veritabanı Şeması (projeler tablosu)
+## 📂 Önemli Dosyalar ve Konumlar
+- `ide_yonetici.pyw`: Self-contained masaüstü uygulaması (Backend + Frontend HTML inline).
+- `public/index.html`: Firebase Hosting için ayrılmış frontend (shim + UI).
+- `cloudrun/main.py`: Cloud Run entrypoint (aynı `ide_yonetici` modülünü çalıştırır).
+- `ide_yonetici.db`: SQLite veritabanı (script ile aynı dizinde, .gitignore'da).
+- `build/IDE_Yonetici.exe`: PyInstaller ile üretilen taşınabilir sürüm.
+- `docs/archive/`: Eski PRD'ler ve uygulanmamış planlar.
+
+## 🗄️ Veritabanı Şeması (projeler tablosu)
 ```
 id, proje_adi, ide_adi, ide_turu, ide_url, hesap_adi, hesap_email,
 durum, notlar, son_guncelleme, olusturma_tarihi, etiketler,
 lokal_yol, deploy_url, kart_rengi, kart_gorseli
 ```
 
-## �🚀 İş Akışı ve Doğrulama
-1. **Geliştirme:** `ARAYUZ_HTML` değişkeni içindeki JS/CSS kodlarını güncelleyin.
+## 🚀 İş Akışı ve Doğrulama
+1. **Geliştirme:** `ARAYUZ_HTML` değişkeni içindeki JS/CSS kodlarını güncelleyin. Aynı zamanda `public/index.html`'i senkronize edin.
 2. **Yenileme:** Değişikliklerin yansıması için Python sürecini durdurup (`Ctrl+C`) tekrar başlatın. Tarayıcıda `Ctrl+F5` yapın.
 3. **Tanılama:** `/api/diagnostic` uç noktasının "Healthy" döndüğünü doğrulayın.
+4. **Deploy:** Frontend değişikliklerini `firebase deploy --only hosting` ile yayınlayın.
 
 ## ⚠️ Bilinen "Gotcha"lar
 - **Port Çakışması:** Sunucu `8888` meşgulse otomatik olarak portu artırır.
 - **Büyük Görseller:** `kart_gorseli` Base64 olarak DB'de saklanır. 500KB görsel ~670KB yer kaplar. Çok sayıda büyük görselli proje DB boyutunu artırır.
 - **Tarayıcı Kapanınca:** `beforeunload` event'i `navigator.sendBeacon('/api/kapat')` çağırır, Python süreci kapanır.
-- **`firebase_ayarlar.json`:** Gerçek API key içerir, asla commit etme. Firebase Console'da **Authorized domains** listesini sıkılaştır (sadece `localhost` ve gerekiyorsa gerçek domain) — domain kısıtlaması olmadan API key kötüye kullanılabilir.
+- **Cloud Run Refactor:** `cloudrun/ide_yonetici.py` şu an kök `ide_yonetici.pyw` ile birebir aynı. PyWebView import'u Cloud Run container init'te patlar — gelecekte koşullu import (`if not CLOUD_RUN:`) ile ayrılmalı.
+- **API Key Güvenliği:** `public/index.html` içindeki Firebase config'i (apiKey, vb.) client-side'dır, normal. Firebase Console'da **Authorized domains** listesini sıkılaştır (sadece `localhost` ve gerçek domain) — domain kısıtlaması olmadan API key kötüye kullanılabilir.
