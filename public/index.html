@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>IDE Proje Takip Sistemi v2.5</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
@@ -19,13 +18,22 @@
   --accent:#0ea5e9;--accent2:#38bdf8;--glow:rgba(14,165,233,0.25);
   --green:#10b981;--yellow:#f59e0b;--orange:#f97316;--red:#ef4444;--blue:#3b82f6;--purple:#a855f7;
   --border:rgba(255,255,255,0.06);--border2:rgba(14,165,233,0.4);
+  --shadow-sm:0 2px 6px rgba(0,0,0,0.3);--shadow-md:0 8px 24px rgba(0,0,0,0.4);
+  --shadow-lg:0 24px 80px rgba(0,0,0,0.5);--shadow-dropdown:0 4px 20px rgba(0,0,0,.25);
+  --shadow-card-hover:0 18px 44px rgba(0,0,0,0.45);
+  --header-bg:rgba(9,9,22,0.85);--overlay-bg:rgba(0,0,0,0.65);
   --r:14px;--rs:10px;--tr:all .25s cubic-bezier(.4,0,.2,1);
 }
 [data-theme="light"]{
-  --bg:#f8f9fc;--bg2:#ffffff;--bg3:rgba(0,0,0,0.03);
+  --bg:#f5f6fa;--bg2:#ffffff;--bg3:rgba(0,0,0,0.03);
   --bg-hover:rgba(0,0,0,0.06);--bg-modal:#ffffff;
   --text:#1a1a2e;--text2:#5a5a75;--text3:#8a8a9e;
   --border:rgba(0,0,0,0.1);--border2:rgba(124,106,239,0.5);
+  --glow:rgba(124,106,239,0.15);
+  --shadow-sm:0 2px 6px rgba(0,0,0,0.06);--shadow-md:0 8px 24px rgba(0,0,0,0.08);
+  --shadow-lg:0 24px 80px rgba(0,0,0,0.1);--shadow-dropdown:0 4px 20px rgba(0,0,0,0.1);
+  --shadow-card-hover:0 18px 44px rgba(0,0,0,0.08);
+  --header-bg:rgba(255,255,255,0.85);--overlay-bg:rgba(0,0,0,0.4);
 }
 html{scroll-behavior:smooth}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
@@ -37,7 +45,7 @@ body::before{content:'';position:fixed;inset:0;
 /* ===== HEADER ===== */
 .header{padding:28px 40px;display:flex;align-items:center;justify-content:space-between;
   border-bottom:1px solid var(--border);backdrop-filter:blur(20px);
-  position:sticky;top:0;z-index:50;background:rgba(9,9,22,0.85)}
+  position:sticky;top:0;z-index:50;background:var(--header-bg)}
 .brand{display:flex;align-items:center;gap:14px}
 .brand-icon{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,var(--accent),#38bdf8);font-size:22px;
@@ -48,7 +56,7 @@ body::before{content:'';position:fixed;inset:0;
 .avatar-circle{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:border-color .15s;flex-shrink:0;position:relative}
 .avatar-circle:hover{border-color:var(--accent)}
 .avatar-circle img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
-.avatar-dropdown{position:absolute;top:100%;right:0;margin-top:8px;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:0 4px 20px rgba(0,0,0,.25);z-index:1000;overflow:hidden}
+.avatar-dropdown{position:absolute;top:100%;right:0;margin-top:8px;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:var(--shadow-dropdown);z-index:1000;overflow:hidden}
 .avatar-dropdown .ad-header{padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .avatar-dropdown .ad-item{padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text)}
 .avatar-dropdown .ad-item:hover{background:var(--bg2)}
@@ -59,7 +67,7 @@ body::before{content:'';position:fixed;inset:0;
   gap:8px;transition:var(--tr);user-select:none;white-space:nowrap}
 .btn-primary{background:linear-gradient(135deg,var(--accent),#8b7cf0);color:#fff;
   box-shadow:0 4px 16px var(--glow)}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(124,106,239,0.35)}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(124,106,239,0.35),0 0 0 1px rgba(124,106,239,0.1)}
 .btn-success{background:linear-gradient(135deg,#10b981,#22c55e);color:#fff;
   box-shadow:0 4px 14px rgba(16,185,129,0.3)}
 .btn-success:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(16,185,129,0.45)}
@@ -131,8 +139,7 @@ body::before{content:'';position:fixed;inset:0;
   padding:0;transition:transform .28s cubic-bezier(.4,0,.2,1),box-shadow .28s,
   border-color .25s;position:relative;overflow:hidden;user-select:none;
   aspect-ratio:3/4;display:flex;flex-direction:column;will-change:transform}
-.card:hover{border-color:var(--border2);box-shadow:0 18px 44px rgba(0,0,0,0.45),
-  0 0 0 1px rgba(14,165,233,0.15);
+.card:hover{border-color:var(--border2);box-shadow:var(--shadow-card-hover), 0 0 0 1px rgba(14,165,233,0.15);
   transform:translateY(-8px) scale(1.025);z-index:5}
 /* Arka plan görseli — cover ile kartı tamamen doldurur, kırpar ama boşluk bırakmaz */
 .kart-bg-gorsel{position:absolute;inset:0;border-radius:inherit;
@@ -216,14 +223,14 @@ mark{background:var(--yellow);color:#000;border-radius:2px;padding:0 2px}
 .empty-text{font-size:15px;margin-bottom:24px;line-height:1.6}
 
 /* ===== MODAL ===== */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(10px);
+.overlay{position:fixed;inset:0;background:var(--overlay-bg);backdrop-filter:blur(10px);
   display:none;align-items:center;justify-content:center;z-index:1000;padding:20px;cursor:pointer}
 .overlay>.modal{cursor:default}
 .overlay.show{display:flex}
 body.modal-lock{overflow:hidden;touch-action:none}
 .modal{background:var(--bg-modal);border:1px solid var(--border);border-radius:18px;
   width:100%;max-width:560px;max-height:92vh;overflow-y:auto;
-  box-shadow:0 24px 80px rgba(0,0,0,0.5);animation:modalIn .3s ease}
+  box-shadow:var(--shadow-lg);animation:modalIn .3s ease}
 @keyframes modalIn{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:none}}
 .modal-head{padding:24px 28px 18px;display:flex;justify-content:space-between;align-items:center;
   border-bottom:1px solid var(--border)}
@@ -237,7 +244,7 @@ body.modal-lock{overflow:hidden;touch-action:none}
 .form-group label{display:block;font-size:11px;font-weight:600;color:var(--text2);
   margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 .form-group input,.form-group select,.form-group textarea{width:100%;
-  background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--rs);
+  background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);
   padding:11px 14px;color:var(--text);font-size:14px;font-family:inherit;outline:none;
   transition:var(--tr)}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{
@@ -256,7 +263,7 @@ body.modal-lock{overflow:hidden;touch-action:none}
 /* ===== TOAST (BİLDİRİM) ===== */
 .toast{position:fixed;bottom:28px;right:28px;background:var(--bg2);border:1px solid var(--border);
   border-radius:var(--rs);padding:14px 22px;font-size:13px;font-weight:500;z-index:2000;
-  box-shadow:0 8px 32px rgba(0,0,0,0.4);transform:translateY(100px);opacity:0;
+  box-shadow:var(--shadow-md);transform:translateY(100px);opacity:0;
   transition:all .4s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;gap:10px}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.ok{border-left:3px solid var(--green)}
@@ -285,7 +292,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
   text-overflow:ellipsis;white-space:nowrap}
 .ayar-empty{text-align:center;padding:30px;color:var(--text3);font-size:13px}
 .ayar-add-row{display:flex;gap:8px;flex-wrap:wrap}
-.ayar-add-row input,.ayar-add-row select{flex:1;min-width:120px;background:rgba(255,255,255,0.03);
+.ayar-add-row input,.ayar-add-row select{flex:1;min-width:120px;background:var(--bg3);
   border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;color:var(--text);
   font-size:13px;font-family:inherit;outline:none;transition:var(--tr)}
 .ayar-add-row input:focus,.ayar-add-row select:focus{border-color:var(--border2);box-shadow:0 0 0 3px var(--glow)}
@@ -321,7 +328,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 .hizli-ekle-panel.acik{display:block}
 .hizli-ekle-panel .hep-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .hizli-ekle-panel input,.hizli-ekle-panel select{flex:1;min-width:100px;
-  background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:8px;
   padding:8px 12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;transition:var(--tr)}
 .hizli-ekle-panel input:focus,.hizli-ekle-panel select:focus{border-color:var(--border2);box-shadow:0 0 0 2px var(--glow)}
 .hizli-ekle-panel select{appearance:none;cursor:pointer;
@@ -357,7 +364,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 .kart-renk-popup{position:absolute;top:8px;left:8px;z-index:10;
   background:var(--bg2);border:1px solid var(--border);border-radius:10px;
   padding:8px;display:none;flex-direction:column;gap:6px;
-  box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:modalIn .15s ease}
+  box-shadow:var(--shadow-md);animation:modalIn .15s ease}
 .kart-renk-popup.goster{display:flex}
 .kart-renk-popup-palet{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .kart-renk-popup-btn{width:20px;height:20px;border-radius:50%;border:2px solid transparent;
@@ -373,7 +380,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
 /* Kart üzeri renk butonu */
 .kart-renk-btn{position:absolute;bottom:8px;right:8px;z-index:5;
   width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);
-  cursor:pointer;transition:var(--tr);opacity:0;box-shadow:0 2px 6px rgba(0,0,0,0.3)}
+  cursor:pointer;transition:var(--tr);opacity:0;box-shadow:var(--shadow-sm)}
 .card:hover .kart-renk-btn{opacity:1}
 .kart-renk-btn:hover{transform:scale(1.2);border-color:rgba(255,255,255,0.6)}
 
@@ -670,7 +677,6 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
           <p style="font-size:13px;margin-bottom:12px;line-height:1.5;color:var(--text2);padding:0 10px">☁️ Yedekleme ve senkronizasyon için Google hesabınızla giriş yapmanız gerekir.<br>Projeleriniz, IDE'leriniz ve hesaplarınız kaybolmaz, giriş yaptığınızda otomatik yüklenir.</p>
           <a href="#" class="btn btn-primary" id="yedek-auth-btn" style="display:inline-flex">🔐 Google ile Giriş Yap</a>
         </div>
-        <button class="btn btn-ghost" id="google-cikis-btn" onclick="googleCikis()" style="display:none;margin-bottom:10px">Google Çıkış</button>
         <div id="yedek-durum" style="font-size:12px;color:var(--text3);margin-bottom:4px;line-height:1.4"></div>
         <div id="bulut-durum" style="font-size:12px;color:var(--text3);line-height:1.4"></div>
       </div>
@@ -880,7 +886,7 @@ function goster() {
       <div class="empty-text" style="font-size:16px;margin:8px 0 4px">${hicProjeYok ? 'Henüz hiç proje eklenmemiş' : 'Filtreye uygun proje bulunamadı'}</div>
       ${hicProjeYok ? `
         <button class="btn btn-primary" style="margin-top:16px" onclick="modalAc()">+ İlk Projeyi Ekle</button>
-        <p style="margin-top:18px;color:#888;font-size:12px;max-width:380px;line-height:1.5">☁️ <b>Cloud modu:</b> Veriler bu tarayıcının <code>localStorage</code>'ında saklanır. Farklı cihazdan erişirsen orada görünmez.</p>
+        <p style="margin-top:18px;color:var(--text3);font-size:12px;max-width:380px;line-height:1.5">☁️ <b>Cloud modu:</b> Veriler bu tarayıcının <code>localStorage</code>'ında saklanır. Farklı cihazdan erişirsen orada görünmez.</p>
       ` : ''}
     </div>`;
     return;
@@ -1497,7 +1503,7 @@ async function kartRengiUygula(id, renk, buton) {
     // Başlık ve tarih rengini CSS değişkeniyle güncelle
     kart.style.setProperty('--kart-renk', renk || durumRenk);
     const renkBtn = kart.querySelector('.kart-renk-btn');
-    if (renkBtn) renkBtn.style.background = renk || 'rgba(255,255,255,0.15)';
+    if (renkBtn) renkBtn.style.background = renk || 'rgba(128,128,128,0.35)';
   }
   // Popup'u kapat
   if (popup) popup.classList.remove('goster');
