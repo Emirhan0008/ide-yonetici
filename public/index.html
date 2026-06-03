@@ -9,10 +9,17 @@
 <title>IDE Proje Takip Sistemi v2.5</title>
 <script>
 (function(){
-  var V = 'v=20260603-3';
-  if (location.search.indexOf(V) === -1) {
-    var sep = location.search ? '&' : '?';
-    location.replace(location.pathname + location.search + sep + V + location.hash);
+  var V = 'v=20260603-4';
+  var current = location.search;
+  if (current.indexOf(V) !== -1) {
+    return;
+  }
+  var cleaned = current.replace(/[?&]v=[^&]*/g, '').replace(/^&/, '?');
+  if (cleaned === '?') cleaned = '';
+  var sep = cleaned ? '&' : '?';
+  var newUrl = location.pathname + cleaned + sep + V + location.hash;
+  if (newUrl !== location.pathname + current + location.hash) {
+    location.replace(newUrl);
   }
 })();
 </script>
@@ -2223,39 +2230,72 @@ window.addEventListener('unload', () => {
       el.title = '';
       el.onclick = function (e) {
         e.stopPropagation();
-        var dd = el._dropdown;
-        console.log('[SIGNIN-BTN] avatar onclick, _dropdown var mı:', !!dd, 'mevcut is-open:', dd ? dd.classList.contains('is-open') : '-');
-        if (!dd) return;
-        if (dd.classList.contains('is-open')) {
-          dd.classList.remove('is-open');
-        } else {
-          var rect = el.getBoundingClientRect();
-          var vw = window.innerWidth;
-          var leftPos = rect.right - 180;
-          if (leftPos < 8) leftPos = 8;
-          if (leftPos + 220 > vw) leftPos = vw - 220 - 8;
-          dd.style.top = (rect.bottom + 8) + 'px';
-          dd.style.left = leftPos + 'px';
-          dd.classList.add('is-open');
+        var existing = el._dropdown;
+        if (existing && existing.classList.contains('is-open')) {
+          console.log('[SIGNIN-BTN] kapatılıyor, dropdown DOM\'dan kaldırılıyor');
+          existing.remove();
+          el._dropdown = null;
+          return;
         }
+        if (existing) {
+          existing.remove();
+          el._dropdown = null;
+        }
+        var rect = el.getBoundingClientRect();
+        var vw = window.innerWidth;
+        var leftPos = rect.right - 180;
+        if (leftPos < 8) leftPos = 8;
+        if (leftPos + 220 > vw) leftPos = vw - 220 - 8;
+        var dd = document.createElement('div');
+        dd.className = 'avatar-dropdown is-open';
+        dd.style.top = (rect.bottom + 8) + 'px';
+        dd.style.left = leftPos + 'px';
+        var headerRow = document.createElement('div');
+        headerRow.className = 'ad-header';
+        headerRow.textContent = user.email || '';
+        var itemRow = document.createElement('div');
+        itemRow.className = 'ad-item';
+        itemRow.dataset.action = 'signout';
+        itemRow.textContent = '🚪 Çıkış Yap';
+        dd.appendChild(headerRow);
+        dd.appendChild(itemRow);
+        dd.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var itm = ev.target.closest('.ad-item');
+          if (!itm) return;
+          if (itm.dataset.action === 'signout') {
+            console.log('[SIGNIN-BTN] Çıkış Yap tıklandı, auth.signOut() çağrılıyor');
+            dd.remove();
+            el._dropdown = null;
+            auth.signOut().then(function () {
+              console.log('[SIGNIN-BTN] auth.signOut() başarılı');
+            }).catch(function (err) {
+              console.error('[SIGNIN-BTN] auth.signOut() hatası:', err);
+            });
+          }
+        });
+        document.body.appendChild(dd);
+        el._dropdown = dd;
+        console.log('[SIGNIN-BTN] yeni dropdown oluşturuldu, is-open:', dd.classList.contains('is-open'));
+        var ddRef = dd;
         requestAnimationFrame(function () {
-          var dr = dd.getBoundingClientRect();
-          var sh = dd.scrollHeight;
-          var ch = dd.clientHeight;
+          var dr = ddRef.getBoundingClientRect();
+          var sh = ddRef.scrollHeight;
+          var ch = ddRef.clientHeight;
           var topEl = document.elementFromPoint(dr.left + 10, dr.top + 10);
-          var hdrEl = dd.querySelector('.ad-header');
-          var itmEl = dd.querySelector('.ad-item');
+          var hdrEl = ddRef.querySelector('.ad-header');
+          var itmEl = ddRef.querySelector('.ad-item');
           var innerH = hdrEl ? hdrEl.offsetHeight : -2;
           var itemH = itmEl ? itmEl.offsetHeight : -2;
           var hdrCS = hdrEl ? getComputedStyle(hdrEl) : null;
           var itmCS = itmEl ? getComputedStyle(itmEl) : null;
-          var ddCS = getComputedStyle(dd);
+          var ddCS = getComputedStyle(ddRef);
           var hdrText = hdrEl ? JSON.stringify(hdrEl.textContent) : 'null';
           var itmText = itmEl ? JSON.stringify(itmEl.textContent) : 'null';
           var hdrRect = hdrEl ? hdrEl.getBoundingClientRect() : null;
           var itmRect = itmEl ? itmEl.getBoundingClientRect() : null;
-          console.log('[SIGNIN-BTN] dropdown className:', dd.className, 'isOpen:', dd.classList.contains('is-open'));
-          console.log('[SIGNIN-BTN]   dd rect:', dr.top, dr.left, dr.width, dr.height, 'scrollH:', sh, 'clientH:', ch, 'children:', dd.children.length);
+          console.log('[SIGNIN-BTN] dropdown className:', ddRef.className, 'isOpen:', ddRef.classList.contains('is-open'), 'outerHTML başlangıç:', ddRef.outerHTML.substring(0, 100));
+          console.log('[SIGNIN-BTN]   dd rect:', dr.top, dr.left, dr.width, dr.height, 'scrollH:', sh, 'clientH:', ch, 'children:', ddRef.children.length);
           console.log('[SIGNIN-BTN]   dd computed display:', ddCS.display, 'position:', ddCS.position, 'width:', ddCS.width, 'height:', ddCS.height, 'minH:', ddCS.minHeight);
           console.log('[SIGNIN-BTN]   hdrEl:', hdrEl ? 'var' : 'null', 'offsetH:', innerH, 'text:', hdrText, 'rect:', hdrRect ? (hdrRect.top + ',' + hdrRect.left + ' ' + hdrRect.width + 'x' + hdrRect.height) : 'null', 'computed display:', hdrCS ? hdrCS.display : '?', 'fontSize:', hdrCS ? hdrCS.fontSize : '?');
           console.log('[SIGNIN-BTN]   itmEl:', itmEl ? 'var' : 'null', 'offsetH:', itemH, 'text:', itmText, 'rect:', itmRect ? (itmRect.top + ',' + itmRect.left + ' ' + itmRect.width + 'x' + itmRect.height) : 'null', 'computed display:', itmCS ? itmCS.display : '?', 'fontSize:', itmCS ? itmCS.fontSize : '?');
@@ -2365,7 +2405,7 @@ window.addEventListener('unload', () => {
     if (typeof yukle === 'function') yukle();
   });
   window.CloudShim = { auth: auth, db: db, realtimeDinle: realtimeDinle, istatistikHesapla: istatistikHesapla };
-  console.log('[CloudShim] yüklendi, RTDB + Auth aktif');
+  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-4');
 })();
 </script>
 </body>
