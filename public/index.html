@@ -56,9 +56,9 @@ body::before{content:'';position:fixed;inset:0;
 .avatar-circle{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:border-color .15s;flex-shrink:0;position:relative}
 .avatar-circle:hover{border-color:var(--accent)}
 .avatar-circle img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
-.avatar-dropdown{position:absolute;top:100%;right:0;margin-top:8px;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:var(--shadow-dropdown);z-index:1000;overflow:hidden}
-.avatar-dropdown .ad-header{padding:10px 14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.avatar-dropdown .ad-item{padding:10px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text)}
+.avatar-dropdown{position:absolute;top:100%;right:0;margin-top:8px;min-width:180px;min-height:80px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:var(--shadow-dropdown);z-index:1000;overflow:hidden}
+.avatar-dropdown .ad-header{padding:10px 14px;min-height:34px;line-height:14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.avatar-dropdown .ad-item{padding:10px 14px;min-height:35px;line-height:15px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text)}
 .avatar-dropdown .ad-item:hover{background:var(--bg2)}
 
 /* ===== BUTONLAR ===== */
@@ -2211,13 +2211,26 @@ window.addEventListener('unload', () => {
           dd.style.display = 'none';
         } else {
           var rect = el.getBoundingClientRect();
+          var vw = window.innerWidth;
+          var leftPos = rect.right - 180;
+          if (leftPos < 8) leftPos = 8;
+          if (leftPos + 220 > vw) leftPos = vw - 220 - 8;
+          dd.style.position = 'fixed';
           dd.style.top = (rect.bottom + 8) + 'px';
-          dd.style.left = (rect.right - 180) + 'px';
+          dd.style.left = leftPos + 'px';
+          dd.style.width = '220px';
           dd.style.display = 'block';
+          dd.offsetHeight;
         }
-        var dr = dd.getBoundingClientRect();
-        var topEl = document.elementFromPoint(dr.left + 10, dr.top + 10);
-        console.log('[SIGNIN-BTN] dropdown display:', dd.style.display, 'rect:', dr.top, dr.left, dr.width, dr.height, 'üstteki eleman:', topEl ? topEl.tagName + '.' + topEl.className : 'yok');
+        requestAnimationFrame(function () {
+          var dr = dd.getBoundingClientRect();
+          var sh = dd.scrollHeight;
+          var ch = dd.clientHeight;
+          var topEl = document.elementFromPoint(dr.left + 10, dr.top + 10);
+          var innerH = dd.querySelector('.ad-header') ? dd.querySelector('.ad-header').offsetHeight : -1;
+          var itemH = dd.querySelector('.ad-item') ? dd.querySelector('.ad-item').offsetHeight : -1;
+          console.log('[SIGNIN-BTN] dropdown display:', dd.style.display, 'rect:', dr.top, dr.left, dr.width, dr.height, 'scrollH:', sh, 'clientH:', ch, 'ad-header H:', innerH, 'ad-item H:', itemH, 'üst:', topEl ? topEl.tagName + '.' + topEl.className : 'yok');
+        });
       };
       console.log('[SIGNIN-BTN] el.onclick atandı');
     } else {
