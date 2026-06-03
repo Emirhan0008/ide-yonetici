@@ -2170,9 +2170,12 @@ window.addEventListener('unload', () => {
         var dd = document.createElement('div');
         dd.className = 'avatar-dropdown';
         dd.style.display = 'none';
+        dd.style.position = 'fixed';
+        dd.style.zIndex = '10000';
         dd.innerHTML = '<div class="ad-header">' + (user.email || '') + '</div><div class="ad-item" data-action="signout">🚪 Çıkış Yap</div>';
         dd.addEventListener('click', function (e) {
           console.log('[SIGNIN-BTN] dropdown item tıklandı:', e.target);
+          e.stopPropagation();
           var item = e.target.closest('.ad-item');
           if (!item) return;
           if (item.dataset.action === 'signout') {
@@ -2185,12 +2188,14 @@ window.addEventListener('unload', () => {
             });
           }
         });
-        el.appendChild(dd);
+        document.body.appendChild(dd);
         el._dropdown = dd;
         document.addEventListener('click', function (e) {
-          if (!el.contains(e.target)) dropdownGizle();
+          if (!el.contains(e.target) && !dd.contains(e.target)) {
+            dropdownGizle();
+          }
         });
-        console.log('[SIGNIN-BTN] dropdown DOM\'a eklendi, display:', dd.style.display);
+        console.log('[SIGNIN-BTN] dropdown body\'ye eklendi (fixed, z-index:10000), display:', dd.style.display);
       } else {
         console.log('[SIGNIN-BTN] dropdown zaten var, header güncelleniyor');
         el._dropdown.querySelector('.ad-header').textContent = user.email || '';
@@ -2202,9 +2207,17 @@ window.addEventListener('unload', () => {
         var dd = el._dropdown;
         console.log('[SIGNIN-BTN] avatar onclick, _dropdown var mı:', !!dd, 'mevcut display:', dd ? dd.style.display : '-');
         if (!dd) return;
-        var yeni = dd.style.display === 'block' ? 'none' : 'block';
-        dd.style.display = yeni;
-        console.log('[SIGNIN-BTN] dropdown yeni display:', yeni, 'z-index:', getComputedStyle(dd).zIndex);
+        if (dd.style.display === 'block') {
+          dd.style.display = 'none';
+        } else {
+          var rect = el.getBoundingClientRect();
+          dd.style.top = (rect.bottom + 8) + 'px';
+          dd.style.left = (rect.right - 180) + 'px';
+          dd.style.display = 'block';
+        }
+        var dr = dd.getBoundingClientRect();
+        var topEl = document.elementFromPoint(dr.left + 10, dr.top + 10);
+        console.log('[SIGNIN-BTN] dropdown display:', dd.style.display, 'rect:', dr.top, dr.left, dr.width, dr.height, 'üstteki eleman:', topEl ? topEl.tagName + '.' + topEl.className : 'yok');
       };
       console.log('[SIGNIN-BTN] el.onclick atandı');
     } else {
