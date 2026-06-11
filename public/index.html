@@ -9,18 +9,13 @@
 <title>IDE Proje Takip Sistemi v2.5</title>
 <script>
 (function(){
-  var V = 'v=20260603-4';
-  var current = location.search;
-  if (current.indexOf(V) !== -1) {
-    return;
-  }
-  var cleaned = current.replace(/[?&]v=[^&]*/g, '').replace(/^&/, '?');
-  if (cleaned === '?') cleaned = '';
-  var sep = cleaned ? '&' : '?';
-  var newUrl = location.pathname + cleaned + sep + V + location.hash;
-  if (newUrl !== location.pathname + current + location.hash) {
-    location.replace(newUrl);
-  }
+  var V = '20260603-9';
+  try {
+    if (sessionStorage.getItem('ide_build') !== V) {
+      sessionStorage.setItem('ide_build', V);
+      location.reload(true);
+    }
+  } catch(e) {}
 })();
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -75,11 +70,9 @@ body::before{content:'';position:fixed;inset:0;
 .avatar-circle{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:2px solid var(--border);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:13px;transition:border-color .15s;flex-shrink:0;position:relative}
 .avatar-circle:hover{border-color:var(--accent)}
 .avatar-circle img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
-.avatar-dropdown{position:fixed;display:none;z-index:10000;min-width:180px;min-height:80px;width:220px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:var(--shadow-dropdown);overflow:hidden;box-sizing:border-box;flex-direction:column}
-.avatar-dropdown.is-open{display:flex !important}
-.avatar-dropdown .ad-header{display:block;padding:10px 14px;min-height:34px;line-height:14px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;width:100%;height:auto}
-.avatar-dropdown .ad-item{display:flex;padding:10px 14px;min-height:35px;line-height:15px;font-size:13px;cursor:pointer;align-items:center;gap:8px;transition:background .15s;color:var(--text);box-sizing:border-box;width:100%;height:auto}
-.avatar-dropdown .ad-item:hover{background:var(--bg2)}
+.avatar-dropdown{position:fixed;display:flex !important;flex-direction:column;z-index:10000;min-width:180px;min-height:80px !important;width:220px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rs,8px);box-shadow:var(--shadow-dropdown);overflow:hidden;box-sizing:border-box;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .15s,visibility .15s}
+.avatar-dropdown.is-open{visibility:visible;opacity:1;pointer-events:auto}
+.avatar-dropdown .ad-header,.avatar-dropdown .ad-item{box-sizing:border-box;width:100%}
 
 /* ===== BUTONLAR ===== */
 .btn{padding:10px 22px;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;
@@ -891,14 +884,20 @@ function goster() {
   const fTur = document.getElementById('f-tur').value;
   const fIde = document.getElementById('f-ide').value;
 
-  const liste = App.projeler.filter(p => {
-    const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email}`.toLowerCase();
-    if (ara && !metin.includes(ara)) return false;
-    if (fDurum && p.durum !== fDurum) return false;
-    if (fTur && p.ide_turu !== fTur) return false;
-    if (fIde && (p.ide_adi || '').toLowerCase() !== fIde.toLowerCase()) return false;
-    return true;
-  });
+  const liste = App.projeler
+    .filter(p => {
+      const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email}`.toLowerCase();
+      if (ara && !metin.includes(ara)) return false;
+      if (fDurum && p.durum !== fDurum) return false;
+      if (fTur && p.ide_turu !== fTur) return false;
+      if (fIde && (p.ide_adi || '').toLowerCase() !== fIde.toLowerCase()) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const ta = a.olusturma_tarihi || a.guncelleme_tarihi || a.id || '';
+      const tb = b.olusturma_tarihi || b.guncelleme_tarihi || b.id || '';
+      return ta < tb ? 1 : ta > tb ? -1 : 0;
+    });
 
   if (liste.length === 0) {
     const hicProjeYok = App.projeler.length === 0;
@@ -2150,7 +2149,7 @@ window.addEventListener('unload', () => {
       el._dropdown.parentNode.removeChild(el._dropdown);
     }
     if (el) el._dropdown = null;
-    console.log('[SIGNIN-BTN] removeDropdown çalıştı, eski dropdown DOM\'dan kaldırıldı');
+    console.log('[SIGNIN-BTN] removeDropdown çalıştı, dropdown DOM\'dan kaldırıldı');
   }
   function guncelleSignInBtn(user) {
     console.log('[SIGNIN-BTN] guncelleSignInBtn çağrıldı, user =', user ? user.email : 'null');
@@ -2158,12 +2157,6 @@ window.addEventListener('unload', () => {
     if (!el) { console.warn('[SIGNIN-BTN] #firebase-signin-btn bulunamadı'); return; }
     var yedekPrompt = document.getElementById('yedek-auth-prompt');
     var yedekBtn = document.getElementById('yedek-auth-btn');
-    var dropdownGizle = function () {
-      if (el._dropdown) {
-        el._dropdown.style.display = 'none';
-        console.log('[SIGNIN-BTN] dropdown dış tıklama ile gizlendi');
-      }
-    };
     if (user) {
       console.log('[SIGNIN-BTN] user var:', user.email, 'photoURL:', user.photoURL || 'yok');
       if (yedekPrompt) yedekPrompt.style.display = 'none';
@@ -2186,25 +2179,26 @@ window.addEventListener('unload', () => {
         el.innerHTML = user.email ? user.email[0].toUpperCase() : '?';
       }
       if (!el._dropdown) {
-        console.log('[SIGNIN-BTN] dropdown ilk kez oluşturuluyor');
+        console.log('[SIGNIN-BTN] regular div dropdown ilk kez oluşturuluyor (display:flex sabit, inline !important stiller)');
         var dd = document.createElement('div');
         dd.className = 'avatar-dropdown';
         var headerRow = document.createElement('div');
         headerRow.className = 'ad-header';
         headerRow.textContent = user.email || '';
+        headerRow.style.cssText = 'display:block !important;padding:10px 14px !important;min-height:34px !important;line-height:14px !important;font-size:12px !important;color:var(--text2) !important;border-bottom:1px solid var(--border) !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;box-sizing:border-box !important;width:100% !important;height:auto !important;visibility:visible !important;opacity:1 !important;';
         var itemRow = document.createElement('div');
         itemRow.className = 'ad-item';
         itemRow.dataset.action = 'signout';
         itemRow.textContent = '🚪 Çıkış Yap';
+        itemRow.style.cssText = 'display:flex !important;padding:10px 14px !important;min-height:35px !important;line-height:15px !important;font-size:13px !important;color:var(--text) !important;cursor:pointer !important;align-items:center !important;gap:8px !important;box-sizing:border-box !important;width:100% !important;height:auto !important;visibility:visible !important;opacity:1 !important;';
         dd.appendChild(headerRow);
         dd.appendChild(itemRow);
         dd.addEventListener('click', function (e) {
-          console.log('[SIGNIN-BTN] dropdown item tıklandı:', e.target);
           e.stopPropagation();
           var item = e.target.closest('.ad-item');
           if (!item) return;
           if (item.dataset.action === 'signout') {
-            console.log('[SIGNIN-BTN] Çıkış Yap tıklandı, auth.signOut() çağrılıyor');
+            console.log('[SIGNIN-BTN] Çıkış Yap tıklandı, dropdown kapat + auth.signOut()');
             dd.classList.remove('is-open');
             auth.signOut().then(function () {
               console.log('[SIGNIN-BTN] auth.signOut() başarılı');
@@ -2216,11 +2210,13 @@ window.addEventListener('unload', () => {
         document.body.appendChild(dd);
         el._dropdown = dd;
         document.addEventListener('click', function (e) {
-          if (!el.contains(e.target) && !dd.contains(e.target)) {
-            dropdownGizle();
+          if (el._dropdown && el._dropdown.classList.contains('is-open') &&
+              !el.contains(e.target) && !el._dropdown.contains(e.target)) {
+            el._dropdown.classList.remove('is-open');
+            console.log('[SIGNIN-BTN] dış tıklama, is-open kaldırıldı');
           }
         });
-        console.log('[SIGNIN-BTN] dropdown oluşturuldu, children:', dd.children.length, 'classNames:', dd.children[0] ? dd.children[0].className : '-', '|', dd.children[1] ? dd.children[1].className : '-');
+        console.log('[SIGNIN-BTN] dropdown DOM\'a eklendi, display:flex sabit, visibility/opacity ile aç-kapa, children inline !important');
       } else {
         console.log('[SIGNIN-BTN] dropdown zaten var, header güncelleniyor');
         var hdr = el._dropdown.querySelector('.ad-header');
@@ -2230,59 +2226,31 @@ window.addEventListener('unload', () => {
       el.title = '';
       el.onclick = function (e) {
         e.stopPropagation();
-        var existing = el._dropdown;
-        if (existing && existing.classList.contains('is-open')) {
-          console.log('[SIGNIN-BTN] kapatılıyor, dropdown DOM\'dan kaldırılıyor');
-          existing.remove();
-          el._dropdown = null;
+        var ddRef = el._dropdown;
+        if (!ddRef) {
+          console.warn('[SIGNIN-BTN] dropdown yok, yeniden oluşturuluyor');
+          guncelleSignInBtn(user);
+          el._dropdown.classList.add('is-open');
           return;
         }
-        if (existing) {
-          existing.remove();
-          el._dropdown = null;
+        if (ddRef.classList.contains('is-open')) {
+          ddRef.classList.remove('is-open');
+          console.log('[SIGNIN-BTN] dropdown kapatıldı (is-open kaldırıldı)');
+        } else {
+          var rect = el.getBoundingClientRect();
+          var vw = window.innerWidth;
+          var leftPos = rect.right - 180;
+          if (leftPos < 8) leftPos = 8;
+          if (leftPos + 220 > vw) leftPos = vw - 220 - 8;
+          ddRef.style.top = (rect.bottom + 8) + 'px';
+          ddRef.style.left = leftPos + 'px';
+          ddRef.classList.add('is-open');
+          console.log('[SIGNIN-BTN] dropdown açıldı (is-open eklendi, display:flex SABİT kaldı, sadece visibility/opacity değişti)');
         }
-        var rect = el.getBoundingClientRect();
-        var vw = window.innerWidth;
-        var leftPos = rect.right - 180;
-        if (leftPos < 8) leftPos = 8;
-        if (leftPos + 220 > vw) leftPos = vw - 220 - 8;
-        var dd = document.createElement('div');
-        dd.className = 'avatar-dropdown is-open';
-        dd.style.top = (rect.bottom + 8) + 'px';
-        dd.style.left = leftPos + 'px';
-        var headerRow = document.createElement('div');
-        headerRow.className = 'ad-header';
-        headerRow.textContent = user.email || '';
-        var itemRow = document.createElement('div');
-        itemRow.className = 'ad-item';
-        itemRow.dataset.action = 'signout';
-        itemRow.textContent = '🚪 Çıkış Yap';
-        dd.appendChild(headerRow);
-        dd.appendChild(itemRow);
-        dd.addEventListener('click', function (ev) {
-          ev.stopPropagation();
-          var itm = ev.target.closest('.ad-item');
-          if (!itm) return;
-          if (itm.dataset.action === 'signout') {
-            console.log('[SIGNIN-BTN] Çıkış Yap tıklandı, auth.signOut() çağrılıyor');
-            dd.remove();
-            el._dropdown = null;
-            auth.signOut().then(function () {
-              console.log('[SIGNIN-BTN] auth.signOut() başarılı');
-            }).catch(function (err) {
-              console.error('[SIGNIN-BTN] auth.signOut() hatası:', err);
-            });
-          }
-        });
-        document.body.appendChild(dd);
-        el._dropdown = dd;
-        console.log('[SIGNIN-BTN] yeni dropdown oluşturuldu, is-open:', dd.classList.contains('is-open'));
-        var ddRef = dd;
         requestAnimationFrame(function () {
           var dr = ddRef.getBoundingClientRect();
           var sh = ddRef.scrollHeight;
           var ch = ddRef.clientHeight;
-          var topEl = document.elementFromPoint(dr.left + 10, dr.top + 10);
           var hdrEl = ddRef.querySelector('.ad-header');
           var itmEl = ddRef.querySelector('.ad-item');
           var innerH = hdrEl ? hdrEl.offsetHeight : -2;
@@ -2296,13 +2264,12 @@ window.addEventListener('unload', () => {
           var itmRect = itmEl ? itmEl.getBoundingClientRect() : null;
           console.log('[SIGNIN-BTN] dropdown className:', ddRef.className, 'isOpen:', ddRef.classList.contains('is-open'), 'outerHTML başlangıç:', ddRef.outerHTML.substring(0, 100));
           console.log('[SIGNIN-BTN]   dd rect:', dr.top, dr.left, dr.width, dr.height, 'scrollH:', sh, 'clientH:', ch, 'children:', ddRef.children.length);
-          console.log('[SIGNIN-BTN]   dd computed display:', ddCS.display, 'position:', ddCS.position, 'width:', ddCS.width, 'height:', ddCS.height, 'minH:', ddCS.minHeight);
-          console.log('[SIGNIN-BTN]   hdrEl:', hdrEl ? 'var' : 'null', 'offsetH:', innerH, 'text:', hdrText, 'rect:', hdrRect ? (hdrRect.top + ',' + hdrRect.left + ' ' + hdrRect.width + 'x' + hdrRect.height) : 'null', 'computed display:', hdrCS ? hdrCS.display : '?', 'fontSize:', hdrCS ? hdrCS.fontSize : '?');
-          console.log('[SIGNIN-BTN]   itmEl:', itmEl ? 'var' : 'null', 'offsetH:', itemH, 'text:', itmText, 'rect:', itmRect ? (itmRect.top + ',' + itmRect.left + ' ' + itmRect.width + 'x' + itmRect.height) : 'null', 'computed display:', itmCS ? itmCS.display : '?', 'fontSize:', itmCS ? itmCS.fontSize : '?');
-          console.log('[SIGNIN-BTN]   üst:', topEl ? topEl.tagName + '.' + topEl.className : 'yok');
+          console.log('[SIGNIN-BTN]   dd computed display:', ddCS.display, 'visibility:', ddCS.visibility, 'opacity:', ddCS.opacity, 'position:', ddCS.position, 'width:', ddCS.width, 'height:', ddCS.height, 'minH:', ddCS.minHeight);
+          console.log('[SIGNIN-BTN]   hdrEl:', hdrEl ? 'var' : 'null', 'offsetH:', innerH, 'text:', hdrText, 'rect:', hdrRect ? (hdrRect.top + ',' + hdrRect.left + ' ' + hdrRect.width + 'x' + hdrRect.height) : 'null', 'computed display:', hdrCS ? hdrCS.display : '?', 'visibility:', hdrCS ? hdrCS.visibility : '?', 'fontSize:', hdrCS ? hdrCS.fontSize : '?');
+          console.log('[SIGNIN-BTN]   itmEl:', itmEl ? 'var' : 'null', 'offsetH:', itemH, 'text:', itmText, 'rect:', itmRect ? (itmRect.top + ',' + itmRect.left + ' ' + itmRect.width + 'x' + itmRect.height) : 'null', 'computed display:', itmCS ? itmCS.display : '?', 'visibility:', itmCS ? itmCS.visibility : '?', 'fontSize:', itmCS ? itmCS.fontSize : '?');
         });
       };
-      console.log('[SIGNIN-BTN] el.onclick atandı');
+      console.log('[SIGNIN-BTN] el.onclick atandı (class toggle, display SABİT)');
     } else {
       if (yedekPrompt) yedekPrompt.style.display = 'block';
       var yedekCikisBtn2 = document.getElementById('yedek-cikis-btn');
@@ -2405,7 +2372,7 @@ window.addEventListener('unload', () => {
     if (typeof yukle === 'function') yukle();
   });
   window.CloudShim = { auth: auth, db: db, realtimeDinle: realtimeDinle, istatistikHesapla: istatistikHesapla };
-  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-4');
+  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-9');
 })();
 </script>
 </body>

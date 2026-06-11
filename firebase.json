@@ -36,6 +36,13 @@
       }
     ],
     "cleanUrls": true,
-    "trailingSlash": false
+    "trailingSlash": false,
+    "redirects": [
+      {
+        "source": "/app",
+        "destination": "/",
+        "type": 301
+      }
+    ]
   }
 }
