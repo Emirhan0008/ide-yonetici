@@ -9,7 +9,7 @@
 <title>IDE Proje Takip Sistemi v2.5</title>
 <script>
 (function(){
-  var V = 'v=20260603-7';
+  var V = 'v=20260603-8';
   var current = location.search;
   if (current.indexOf(V) !== -1) {
     return;
@@ -889,14 +889,20 @@ function goster() {
   const fTur = document.getElementById('f-tur').value;
   const fIde = document.getElementById('f-ide').value;
 
-  const liste = App.projeler.filter(p => {
-    const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email}`.toLowerCase();
-    if (ara && !metin.includes(ara)) return false;
-    if (fDurum && p.durum !== fDurum) return false;
-    if (fTur && p.ide_turu !== fTur) return false;
-    if (fIde && (p.ide_adi || '').toLowerCase() !== fIde.toLowerCase()) return false;
-    return true;
-  });
+  const liste = App.projeler
+    .filter(p => {
+      const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email}`.toLowerCase();
+      if (ara && !metin.includes(ara)) return false;
+      if (fDurum && p.durum !== fDurum) return false;
+      if (fTur && p.ide_turu !== fTur) return false;
+      if (fIde && (p.ide_adi || '').toLowerCase() !== fIde.toLowerCase()) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const ta = a.olusturma_tarihi || a.guncelleme_tarihi || a.id || '';
+      const tb = b.olusturma_tarihi || b.guncelleme_tarihi || b.id || '';
+      return ta < tb ? 1 : ta > tb ? -1 : 0;
+    });
 
   if (liste.length === 0) {
     const hicProjeYok = App.projeler.length === 0;
@@ -2371,7 +2377,7 @@ window.addEventListener('unload', () => {
     if (typeof yukle === 'function') yukle();
   });
   window.CloudShim = { auth: auth, db: db, realtimeDinle: realtimeDinle, istatistikHesapla: istatistikHesapla };
-  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-7-inline');
+  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-8-sort');
 })();
 </script>
 </body>
