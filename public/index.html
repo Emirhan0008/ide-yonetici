@@ -9,7 +9,7 @@
 <title>IDE Proje Takip Sistemi v2.5</title>
 <script>
 (function(){
-  var V = '20260603-9';
+  var V = '20260603-10';
   try {
     if (sessionStorage.getItem('ide_build') !== V) {
       sessionStorage.setItem('ide_build', V);
@@ -832,6 +832,27 @@ async function yukle() {
 }
 
 async function _yukleImpl() {
+  // Hızlı başlangıç: localStorage cache varsa anında göster (arka planda Firebase tazele)
+  try {
+    var cache = JSON.parse(localStorage.getItem('ide_cache'));
+    if (cache && cache.v === 2 && Array.isArray(cache.p) && cache.p.length > 0) {
+      App.projeler = cache.p;
+      if (cache.o) App.oneriVeri = cache.o;
+      if (cache.ti) App.tanimliIdeler = cache.ti;
+      if (cache.th) App.tanimliHesaplar = cache.th;
+      if (cache.i && App.el.ist) {
+        App.el.ist.toplam.textContent = cache.i.t || 0;
+        App.el.ist.aktif.textContent = cache.i.a || 0;
+        App.el.ist.bitti.textContent = cache.i.b || 0;
+        App.el.ist.bulut.textContent = cache.i.bl || 0;
+        App.el.ist.ide.textContent = cache.i.ide || 0;
+        App.el.ist.hesap.textContent = cache.i.h || 0;
+      }
+      goster();
+      console.log('[CACHE] localStorage cache yüklendi, anında render', cache.p.length, 'proje');
+    }
+  } catch (e) { /* cache bozuksa yoksay */ }
+
   const sonuclar = await Promise.allSettled([
     Utils.api('/api/projeler'),
     Utils.api('/api/otomatik'),
@@ -875,6 +896,15 @@ async function _yukleImpl() {
 
   hizliIdeGoster();
   goster();
+
+  // Cache'i güncelle
+  try {
+    localStorage.setItem('ide_cache', JSON.stringify({
+      v: 2, p: App.projeler, o: App.oneriVeri, ti: App.tanimliIdeler, th: App.tanimliHesaplar,
+      i: { t: ist.toplam, a: ist.aktif, b: ist.bitti, bl: ist.bulut, ide: ist.ide_sayisi, h: ist.hesap_sayisi },
+      z: Date.now()
+    }));
+  } catch (e) { /* localStorage doluysa yoksay */ }
 }
 
 function goster() {
@@ -2372,7 +2402,7 @@ window.addEventListener('unload', () => {
     if (typeof yukle === 'function') yukle();
   });
   window.CloudShim = { auth: auth, db: db, realtimeDinle: realtimeDinle, istatistikHesapla: istatistikHesapla };
-  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-9');
+  console.log('[CloudShim] yüklendi, RTDB + Auth aktif, build=20260603-10');
 })();
 </script>
 </body>
