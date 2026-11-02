@@ -23,7 +23,8 @@ Vite + vanilla TypeScript'e geçiş sürüyor. **Faz 1 inşa edildi:**
 - `src/firebase.ts` modular SDK v13 · `src/model.ts` tipler · `src/store.ts` tipli state · `src/auth.ts` popup+redirect giriş · `src/data/` tek veri kapısı (projeler, tanimlilar, gorseller, rtdb yardımcıları).
 - `data/gorseller.ts` Faz 2 boru hattını içeriyor: `gorseliKucult` (800px JPEG) + ayrı `users/$uid/gorseller/$projeId` yolu + `gorselleriGocEt` (bir defalık migration).
 - RTDB şeması değişmedi; canlı site hâlâ `public/index.html`. **Flag day:** Faz 3 UI taşınımı bitince `firebase.json` → `public: "app/dist"`, eski dosya `docs/archive/`'e.
-- Kalan: Faz 3 (UI modülleri: kartlar, modal, taslak, tema, renk, ayarlar), Faz 4 (hedefli DOM güncelleme + Playwright smoke testleri).
+- **Faz 3 ilk dilim tamam:** `app/src/ui/` (dom, renkler, tema, kartlar, modal) + tam `index.html` + `styles/` (tema/kartlar/modal CSS). Kart ızgarası, arama+vurgulama, durum/tür/IDE/sahiplik filtreleri, 7 istatistik, ekle/düzenle/sil modalı, taslak (V6), kart rengi popup, silme onayı, tema, tembel görsel yükleme — hepsi `data/` kapısından geçiyor. Canlı tarayıcı smoke testleri (Playwright) geçti: render, arama, filtre, modal-dolu, tema, mobil grid, tırnaklı ad (güvenli delegasyon).
+- Kalan Faz 3: Ayarlar paneli (IDE/hesap CRUD, JSON export/import, app arka planı), `gorselleriGocEt` için tetikleyici UI, avatar dropdown'ına Ayarlar girişi. Sonra Faz 4 (hedefli DOM + Playwright smoke testleri + flag day: `firebase.json` public → `app/dist`).
 
 ## 🗄️ Veri Katmanı (Firebase RTDB)
 - Kök: `users/$uid/` (rules: yalnızca kendi uid'sini okur/yazar — `database.rules.json`).
