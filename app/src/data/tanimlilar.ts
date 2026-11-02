@@ -1,5 +1,5 @@
 // Tanımlı IDE ve hesap listeleri (users/$uid/ideler, users/$uid/hesaplar).
-import { push, ref, remove } from 'firebase/database';
+import { push, ref, remove, set } from 'firebase/database';
 import { db, kullaniciYolu } from '../firebase';
 import type { TanimliHesap, TanimliIde } from '../model';
 import { kullaniciDinle } from './rtdb';
@@ -26,4 +26,19 @@ export async function hesapEkle(uid: string, hesap: Omit<TanimliHesap, 'id'>): P
 
 export async function hesapSil(uid: string, id: string): Promise<void> {
   await remove(ref(db, kullaniciYolu(uid, `hesaplar/${id}`)));
+}
+
+/** JSON içe aktarma: listeyi topluca yaz (mevcutların yerine). */
+export async function tanimlilariTopluYaz(
+  uid: string,
+  tip: 'ideler' | 'hesaplar',
+  liste: Record<string, unknown>[],
+): Promise<void> {
+  const taban = Date.now().toString(36);
+  const ob: Record<string, unknown> = {};
+  liste.forEach((o, i) => {
+    const { id: _id, ...temiz } = o as { id?: string };
+    ob[`${taban}${i}`] = temiz;
+  });
+  await set(ref(db, kullaniciYolu(uid, tip)), ob);
 }

@@ -1,0 +1,35 @@
+/* ===== ARAYÜZ CİLASI ===== */
+/* Odak halkaları — klavye ile gezinenler için */
+:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent2);outline-offset:1px}
+
+/* Tema kaydırma çubuğu */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg-hover);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);background-clip:content-box}
+
+/* Tıklanabilir istatistikler */
+.stat[data-filtre]{cursor:pointer}
+.stat[data-filtre]:active{transform:translateY(0) scale(.97)}
+.stat.secili{border-color:var(--border2);background:var(--bg-hover)}
+
+/* Sayaç satırı */
+.sayim{margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;padding:2px 6px}
+
+/* Hareket hassasiyeti (erişilebilirlik) */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .card:hover{transform:none}
+}
+
+/* Mobil: kartlar çok uzun olmasın, yazılar küçülsün */
+@media(max-width:640px){
+  .card{aspect-ratio:4/5}
+  .card-title{font-size:12px}
+  .card-row{font-size:11px}
+  .card-note{-webkit-line-clamp:3}
+  .stat-val{font-size:16px}
+  .stat{padding:8px 10px;gap:8px}
+  .sayim{width:100%;margin-left:0}
+}

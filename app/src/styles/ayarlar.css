@@ -1,0 +1,44 @@
+/* ===== AYARLAR PANELİ ===== */
+.ayar-modal .modal{max-width:700px}
+.ayar-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0}
+.ayar-tab{padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);
+  border-bottom:2px solid transparent;transition:var(--tr);background:none;border-top:none;
+  border-left:none;border-right:none;font-family:inherit}
+.ayar-tab:hover{color:var(--text)}
+.ayar-tab.active{color:var(--accent2);border-bottom-color:var(--accent2)}
+.ayar-sec{display:none}
+.ayar-sec.active{display:block}
+.ayar-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto}
+.ayar-item{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--rs);transition:var(--tr)}
+.ayar-item:hover{border-color:var(--border2)}
+.ayar-item .ai-info{flex:1;min-width:0}
+.ayar-item .ai-name{font-size:14px;font-weight:600}
+.ayar-item .ai-detail{font-size:12px;color:var(--text2);margin-top:2px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.ayar-empty{text-align:center;padding:30px;color:var(--text3);font-size:13px}
+.ayar-add-row{display:flex;gap:8px;flex-wrap:wrap}
+.ayar-add-row input,.ayar-add-row select{flex:1;min-width:120px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;color:var(--text);
+  font-size:13px;font-family:inherit;outline:none;transition:var(--tr)}
+.ayar-add-row input:focus,.ayar-add-row select:focus{border-color:var(--border2);box-shadow:0 0 0 3px var(--glow)}
+.ayar-add-row select{appearance:none;cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%237b7b9e' d='M5 7L1 3h8z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center}
+.ayar-add-row select option{background:var(--bg2)}
+.ayar-bilgi{font-size:12px;color:var(--text2);line-height:1.7;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--rs);padding:12px 16px;margin-bottom:16px}
+.ayar-bilgi b{color:var(--text)}
+.ayar-butonlar{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ===== UYGULAMA ARKA PLANI ===== */
+#app-bg-katman{position:fixed;inset:0;z-index:-2;
+  background-size:cover;background-position:center;
+  filter:blur(14px) brightness(0.35);opacity:0;
+  pointer-events:none;transition:opacity 0.5s}
+#app-bg-katman.aktif{opacity:1}
+
+@media(max-width:640px){
+  .ayar-add-row{flex-direction:column}
+  .ayar-tabs{overflow-x:auto}
+}

@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <title>IDE Proje Takip</title>
 </head>
 <body>
+
+<div id="app-bg-katman"></div>
 
 <header class="header">
   <div class="brand">
@@ -14,10 +17,12 @@
   </div>
   <div class="header-actions">
     <button class="btn btn-icon" id="btn-tema" title="Temayı Değiştir">🌓</button>
+    <button class="btn btn-ghost" id="btn-ayarlar">⚙ Ayarlar</button>
     <button class="btn btn-primary" id="btn-yeni-proje">+ Yeni Proje</button>
     <div id="avatar-btn" class="avatar-circle" title="Google ile Giriş Yap">?</div>
     <div id="avatar-dd" class="avatar-dropdown">
       <div class="ad-header" id="dd-email">—</div>
+      <button class="ad-item" id="dd-ayarlar" type="button">⚙ Ayarlar</button>
       <button class="ad-item" id="dd-cikis" type="button">🚪 Çıkış Yap</button>
     </div>
   </div>
@@ -29,6 +34,7 @@
   </div>
   <select class="filter-sel" id="f-durum">
     <option value="">Tüm Durumlar</option>
+    <option value="devam">⚡ Devam Eden</option>
     <option>Bitti</option>
     <option>Yarım Kaldı</option>
     <option>Bitmedi ama çalışıyor</option>
@@ -49,16 +55,17 @@
     <option value="Bireysel">👤 Bireysel</option>
     <option value="Kurumsal">🏢 Kurumsal</option>
   </select>
+  <span class="sayim" id="sayim"></span>
 </div>
 
-<div class="stats">
-  <div class="stat"><div class="stat-icon">📁</div><div class="stat-info"><div class="stat-val" id="s-toplam">0</div><div class="stat-lbl">Toplam</div></div></div>
-  <div class="stat"><div class="stat-icon">⚡</div><div class="stat-info"><div class="stat-val" id="s-aktif">0</div><div class="stat-lbl">Devam Eden</div></div></div>
-  <div class="stat"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-val" id="s-bitti">0</div><div class="stat-lbl">Bitti</div></div></div>
-  <div class="stat"><div class="stat-icon">☁️</div><div class="stat-info"><div class="stat-val" id="s-bulut">0</div><div class="stat-lbl">Bulut</div></div></div>
+<div class="stats" id="stats">
+  <div class="stat" data-sifirla title="Filtreleri temizle"><div class="stat-icon">📁</div><div class="stat-info"><div class="stat-val" id="s-toplam">0</div><div class="stat-lbl">Toplam</div></div></div>
+  <div class="stat" data-durum="devam" title="Devam edenleri göster"><div class="stat-icon">⚡</div><div class="stat-info"><div class="stat-val" id="s-aktif">0</div><div class="stat-lbl">Devam Eden</div></div></div>
+  <div class="stat" data-durum="Bitti" title="Bitenleri göster"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-val" id="s-bitti">0</div><div class="stat-lbl">Bitti</div></div></div>
+  <div class="stat" data-tur="Bulut" title="Bulut projeleri göster"><div class="stat-icon">☁️</div><div class="stat-info"><div class="stat-val" id="s-bulut">0</div><div class="stat-lbl">Bulut</div></div></div>
   <div class="stat"><div class="stat-icon">🛠️</div><div class="stat-info"><div class="stat-val" id="s-ide">0</div><div class="stat-lbl">IDE</div></div></div>
   <div class="stat"><div class="stat-icon">👤</div><div class="stat-info"><div class="stat-val" id="s-hesap">0</div><div class="stat-lbl">Hesap</div></div></div>
-  <div class="stat"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-val" id="s-kurumsal">0</div><div class="stat-lbl">Kurumsal</div></div></div>
+  <div class="stat" data-sahiplik="Kurumsal" title="Kurumsal projeleri göster"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-val" id="s-kurumsal">0</div><div class="stat-lbl">Kurumsal</div></div></div>
 </div>
 
 <main class="grid" id="kartlar"></main>
@@ -187,6 +194,61 @@
     <div class="modal-foot">
       <button class="btn btn-ghost" id="sil-iptal" type="button">Vazgeç</button>
       <button class="btn btn-danger" id="sil-onayla" type="button">🗑️ Sil</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== AYARLAR ===== -->
+<div class="overlay ayar-modal" id="ayar-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>⚙ Ayarlar</h2>
+      <button class="modal-close" id="ayar-kapat" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="ayar-tabs">
+        <button class="ayar-tab active" data-sec="0" type="button">🛠 IDE'ler</button>
+        <button class="ayar-tab" data-sec="1" type="button">👤 Hesaplar</button>
+        <button class="ayar-tab" data-sec="2" type="button">💾 Veri</button>
+        <button class="ayar-tab" data-sec="3" type="button">🎨 Görünüm</button>
+      </div>
+
+      <div class="ayar-sec active" data-sec="0">
+        <div class="ayar-list" id="ayar-ide-liste"></div>
+        <div class="ayar-add-row">
+          <input id="ayar-ide-adi" placeholder="IDE adı (Cursor, Replit…)">
+          <select id="ayar-ide-turu"><option>Bulut</option><option>Lokal</option></select>
+          <input id="ayar-ide-url" placeholder="URL (opsiyonel)">
+          <button class="btn btn-primary btn-sm" id="ayar-ide-ekle" type="button">+ Ekle</button>
+        </div>
+      </div>
+
+      <div class="ayar-sec" data-sec="1">
+        <div class="ayar-list" id="ayar-hesap-liste"></div>
+        <div class="ayar-add-row">
+          <input id="ayar-hesap-adi" placeholder="Hesap adı (kisisel, is…)">
+          <input id="ayar-hesap-email" placeholder="E-posta (opsiyonel)">
+          <button class="btn btn-primary btn-sm" id="ayar-hesap-ekle" type="button">+ Ekle</button>
+        </div>
+      </div>
+
+      <div class="ayar-sec" data-sec="2">
+        <div class="ayar-bilgi" id="ayar-veri-bilgi">—</div>
+        <div class="ayar-butonlar">
+          <button class="btn btn-ghost" id="ayar-disa-aktar" type="button">⬇ JSON Olarak İndir</button>
+          <button class="btn btn-ghost" id="ayar-ice-aktar-btn" type="button">⬆ JSON'dan Yükle</button>
+          <input type="file" id="ayar-ice-aktar" accept="application/json,.json" style="display:none">
+        </div>
+      </div>
+
+      <div class="ayar-sec" data-sec="3">
+        <div class="ayar-bilgi">Uygulama arka plan görseli yalnızca bu tarayıcıda saklanır (localStorage). Kart görselleri ise hesabınla buluta senkronize olur.</div>
+        <div class="ayar-butonlar">
+          <button class="btn btn-ghost" id="ayar-bg-sec" type="button">🖼 Arka Plan Seç</button>
+          <button class="btn btn-ghost" id="ayar-bg-kaldir" type="button">✕ Kaldır</button>
+          <input type="file" id="ayar-bg-dosya" accept="image/*" style="display:none">
+        </div>
+      </div>
     </div>
   </div>
 </div>

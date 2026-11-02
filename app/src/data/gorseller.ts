@@ -15,12 +15,12 @@ export interface GorselKaydi {
 }
 
 /** data-url/PNG/JPEG girer, en fazla MAKS_KENAR kenarlı JPEG data-url çıkar. */
-export function gorseliKucult(dataUrl: string): Promise<string> {
+export function gorseliKucult(dataUrl: string, maksKenar: number = MAKS_KENAR): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onerror = () => reject(new Error('Görsel çözümlenemedi'));
     img.onload = () => {
-      const oran = Math.min(1, MAKS_KENAR / Math.max(img.width, img.height));
+      const oran = Math.min(1, maksKenar / Math.max(img.width, img.height));
       const w = Math.max(1, Math.round(img.width * oran));
       const h = Math.max(1, Math.round(img.height * oran));
       const canvas = document.createElement('canvas');

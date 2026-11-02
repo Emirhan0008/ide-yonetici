@@ -2,15 +2,19 @@
 import './styles/tema.css';
 import './styles/kartlar.css';
 import './styles/modal.css';
+import './styles/ayarlar.css';
+import './styles/cila.css';
 
 import { cikisYap, authAboneOl, girisYap } from './auth';
 import { gorselOku } from './data/gorseller';
 import { hizliDurum as veriHizliDurum, kartRengiKaydet, projeleriDinle } from './data/projeler';
 import { hesaplariDinle, ideleriDinle } from './data/tanimlilar';
 import type { Durum, Proje } from './model';
+import { devamEdiyorMu } from './model';
 import type { AppState } from './store';
 import { aboneOl, istatistikHesapla, setState } from './store';
 import { $, benzersizListe, bildirim } from './ui/dom';
+import { ayarlarAc, ayarlarKur, arkaPlanInit } from './ui/ayarlar';
 import { renderGrid } from './ui/kartlar';
 import { modalAc, modalKur, silOnayAc } from './ui/modal';
 import { temaDegistir, temaInit } from './ui/tema';
@@ -21,7 +25,9 @@ const uid = () => sonDurum?.kullanici?.uid ?? null;
 
 /* ===== Kurulum ===== */
 temaInit();
+arkaPlanInit();
 modalKur({ uid });
+ayarlarKur({ uid });
 
 /* ===== Avatar / auth UI ===== */
 function avatarGuncelle(durum: AppState): void {
@@ -59,6 +65,42 @@ document.addEventListener('click', (e) => {
 $('dd-cikis').addEventListener('click', () => void cikisYap());
 $('btn-yeni-proje').addEventListener('click', () => modalAc());
 $('btn-tema').addEventListener('click', temaDegistir);
+$('btn-ayarlar').addEventListener('click', ayarlarAc);
+$('dd-ayarlar').addEventListener('click', () => {
+  $('avatar-dd').classList.remove('is-open');
+  ayarlarAc();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    $('ayar-overlay').classList.remove('show');
+    if (!$('modal-overlay').classList.contains('show') && !$('sil-overlay').classList.contains('show')) {
+      document.body.classList.remove('modal-lock');
+    }
+  }
+});
+
+/* ===== Tıklanabilir istatistikler ===== */
+$('stats').addEventListener('click', (e) => {
+  const stat = (e.target as HTMLElement).closest<HTMLElement>('.stat');
+  if (!stat) return;
+  const fDurum = $<HTMLSelectElement>('f-durum');
+  const fTur = $<HTMLSelectElement>('f-tur');
+  const fSahiplik = $<HTMLSelectElement>('f-sahiplik');
+
+  const hedefDurum = stat.dataset.durum;
+  const hedefTur = stat.dataset.tur;
+  const hedefSahiplik = stat.dataset.sahiplik;
+
+  if (stat.dataset.sifirla !== undefined || (!hedefDurum && !hedefTur && !hedefSahiplik)) {
+    fDurum.value = ''; fTur.value = ''; fSahiplik.value = '';
+  } else {
+    // Toggle: aynı filtreye tekrar basınca temizle
+    if (hedefDurum) fDurum.value = fDurum.value === hedefDurum ? '' : hedefDurum;
+    if (hedefTur) fTur.value = fTur.value === hedefTur ? '' : hedefTur;
+    if (hedefSahiplik) fSahiplik.value = fSahiplik.value === hedefSahiplik ? '' : hedefSahiplik;
+  }
+  if (sonDurum) render(sonDurum);
+});
 
 /* ===== Kart eylemleri ===== */
 const kartEylemleri = {
@@ -107,7 +149,7 @@ function filtreliListe(durum: AppState): Proje[] {
     .filter((p) => {
       const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email} ${p.sahiplik || 'Bireysel'}`.toLowerCase();
       if (ara && !metin.includes(ara)) return false;
-      if (fDurum && p.durum !== fDurum) return false;
+      if (fDurum === 'devam' ? !devamEdiyorMu(p.durum) : fDurum && p.durum !== fDurum) return false;
       if (fTur && p.ide_turu !== fTur) return false;
       if (fIde && (p.ide_adi || '').toLowerCase() !== fIde) return false;
       if (fSahiplik && (p.sahiplik || 'Bireysel') !== fSahiplik) return false;
@@ -130,6 +172,18 @@ function render(durum: AppState): void {
   $('s-hesap').textContent = String(s.hesap_sayisi);
   $('s-kurumsal').textContent = String(s.kurumsal);
 
+  // Aktif filtre eşleşen stat kartlarını işaretle
+  const fDurum = $<HTMLSelectElement>('f-durum').value;
+  const fTur = $<HTMLSelectElement>('f-tur').value;
+  const fSahiplik = $<HTMLSelectElement>('f-sahiplik').value;
+  document.querySelectorAll<HTMLElement>('#stats .stat').forEach((st) => {
+    const aktif =
+      (st.dataset.durum && st.dataset.durum === fDurum) ||
+      (st.dataset.tur && st.dataset.tur === fTur) ||
+      (st.dataset.sahiplik && st.dataset.sahiplik === fSahiplik);
+    st.classList.toggle('secili', !!aktif);
+  });
+
   const ideAdlari = benzersizListe([
     ...durum.projeler.map((p) => p.ide_adi),
     ...durum.ideler.map((i) => i.ide_adi),
@@ -150,6 +204,7 @@ function render(durum: AppState): void {
 
   const kartlar = $('kartlar');
   if (!durum.kullanici) {
+    $('sayim').textContent = '';
     kartlar.innerHTML = `<div class="empty" style="grid-column:1/-1">
       <div class="empty-icon">☁️</div>
       <div class="empty-text">Projelerin Google hesabınla buluta senkronize edilir.<br>Devam etmek için giriş yap.</div>
@@ -161,6 +216,10 @@ function render(durum: AppState): void {
     return;
   }
   renderGrid(kartlar, filtreliListe(durum), ($<HTMLInputElement>('ara')).value.toLowerCase(), kartEylemleri);
+  const gosterilen = kartlar.querySelectorAll('.card').length;
+  $('sayim').textContent = durum.projeler.length === gosterilen
+    ? `${gosterilen} proje`
+    : `${gosterilen} / ${durum.projeler.length} proje gösteriliyor`;
 }
 
 /* ===== Abonelikler ===== */
