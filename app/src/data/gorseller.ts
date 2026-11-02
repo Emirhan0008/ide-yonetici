@@ -7,14 +7,17 @@ import { get, ref, remove, set, update } from 'firebase/database';
 import { db, kullaniciYolu } from '../firebase';
 
 const MAKS_KENAR = 800; // px — kart arka planı + blur(8px) için fazlasıyla yeterli
-const JPEG_KALITE = 0.82;
+const WEBP_KALITE = 0.82;
+const JPEG_KALITE = 0.85;
 
 export interface GorselKaydi {
-  data: string; // küçültülmüş JPEG data-url
+  data: string; // küçültülmüş WebP data-url
   guncelleme_tarihi: string;
 }
 
-/** data-url/PNG/JPEG girer, en fazla MAKS_KENAR kenarlı JPEG data-url çıkar. */
+/**
+ * data-url/PNG/JPEG girer, en fazla MAKS_KENAR kenarlı WebP (gerekirse JPEG yedeği) data-url çıkar.
+ */
 export function gorseliKucult(dataUrl: string, maksKenar: number = MAKS_KENAR): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -29,7 +32,31 @@ export function gorseliKucult(dataUrl: string, maksKenar: number = MAKS_KENAR): 
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject(new Error('canvas 2d bağlamı alınamadı'));
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', JPEG_KALITE));
+
+      const blobDoldur = (tip: string, kalite: number): Promise<Blob> =>
+        new Promise((res, rej) => {
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) return rej(new Error(`Görsel ${tip} olarak sıkıştırılamadı`));
+              res(blob);
+            },
+            tip,
+            kalite,
+          );
+        });
+
+      const dataUrlDoldur = (blob: Blob): Promise<string> =>
+        new Promise((res, rej) => {
+          const okuyici = new FileReader();
+          okuyici.onload = () => res(okuyici.result as string);
+          okuyici.onerror = () => rej(new Error('Görsel verisi dönüştürülemedi'));
+          okuyici.readAsDataURL(blob);
+        });
+
+      blobDoldur('image/webp', WEBP_KALITE)
+        .then((blob) => dataUrlDoldur(blob))
+        .catch(() => blobDoldur('image/jpeg', JPEG_KALITE).then((blob) => dataUrlDoldur(blob)))
+        .then(resolve, reject);
     };
     img.src = dataUrl;
   });

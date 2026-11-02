@@ -13,6 +13,8 @@ export interface KartEylemleri {
   yolKopyala(yol: string): void;
   /** Faz 2: yeni görsel yolu. Eski kayıtlarda inline kart_gorseli olduğundan opsiyonel. */
   gorselGetir?(id: string): Promise<string | null>;
+  /** Etiket çipine tıklama — o etiketi aratır (main.ts uygular). */
+  etiketSec?(etiket: string): void;
 }
 
 const DURUM_CLASS: Record<string, string> = {
@@ -27,6 +29,7 @@ const DURUM_RENK: Record<string, string> = {
   'Bitti': '#10b981', 'Yarım Kaldı': '#f97316', 'Bitmedi ama çalışıyor': '#3b82f6',
   'Pasif': '#4a546a', 'Arşiv': '#f59e0b',
 };
+const DURUM_SECENEKLERI: Durum[] = ['Bitti', 'Yarım Kaldı', 'Bitmedi ama çalışıyor', 'Pasif', 'Arşiv'];
 
 function kartHTML(p: Proje, ara: string): string {
   const durumClass = DURUM_CLASS[p.durum || ''] || 'tag-pasif';
@@ -39,7 +42,7 @@ function kartHTML(p: Proje, ara: string): string {
     : `<span class="tag" style="background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)" title="Bireysel">👤 Bireysel</span>`;
 
   const etiketler = p.etiketler
-    ? `<div class="kart-etiketler">${p.etiketler.split(',').map((e) => `<span class="tag tag-custom">#${highlight(e.trim(), ara)}</span>`).join('')}</div>`
+    ? `<div class="kart-etiketler">${p.etiketler.split(',').map((e) => `<span class="tag tag-custom" data-eylem="etiket" data-etiket="${esc(e.trim())}" title="Bu etiketi ara">#${highlight(e.trim(), ara)}</span>`).join('')}</div>`
     : '';
 
   const acBtn = p.ide_turu === 'Bulut'
@@ -48,9 +51,6 @@ function kartHTML(p: Proje, ara: string): string {
   const deployBtn = p.deploy_url
     ? `<button class="btn btn-success btn-sm" data-eylem="link" data-url="${esc(p.deploy_url)}" title="Deploy edilen siteyi aç">🌐</button>`
     : '';
-
-  const arsivdeMi = p.durum === 'Arşiv';
-  const sonrakiDurum: Durum = arsivdeMi ? 'Bitti' : 'Arşiv';
 
   const gorselDiv = p.kart_gorseli
     ? `<div class="kart-bg-gorsel" style="background-image:url('${p.kart_gorseli}')"></div>`
@@ -86,7 +86,7 @@ function kartHTML(p: Proje, ara: string): string {
       <div class="card-actions-bar">
         ${acBtn}
         ${deployBtn}
-        <button class="btn-icon" data-eylem="hizli-durum" data-durum="${esc(sonrakiDurum)}" title="${esc(sonrakiDurum)}">${arsivdeMi ? '♻️' : '📦'}</button>
+        <select class="kart-durum-sel" data-eylem="durum-sec" title="Durumu değiştir" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 4px;cursor:pointer;width:auto">${DURUM_SECENEKLERI.map((d) => `<option value="${esc(d)}"${d === p.durum ? ' selected' : ''}>${esc(DURUM_KISALT[d] || d)}</option>`).join('')}</select>
         <button class="btn-icon edit" data-eylem="duzenle" title="Düzenle">✏️</button>
         <button class="btn-icon danger" data-eylem="sil" title="Projeyi sil">🗑️</button>
       </div>
@@ -180,6 +180,9 @@ function tiklama(konteyner: HTMLElement, e: MouseEvent): void {
     case 'hizli-durum':
       eylemler.hizliDurum(id, (hedef.dataset.durum ?? 'Arşiv') as Durum);
       break;
+    case 'etiket':
+      eylemler.etiketSec?.(hedef.dataset.etiket ?? '');
+      break;
     case 'duzenle':
       eylemler.duzenle(id);
       break;
@@ -217,9 +220,15 @@ function tiklama(konteyner: HTMLElement, e: MouseEvent): void {
 function degisim(konteyner: HTMLElement, e: Event): void {
   const eylemler = dinlenenler.get(konteyner);
   if (!eylemler) return;
-  const hedef = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="renk-ozel"]');
-  if (!hedef) return;
-  const kart = hedef.closest<HTMLElement>('[data-kart]');
-  eylemler.renkKaydet(kart?.dataset.kart ?? '', (hedef as HTMLInputElement).value);
-  hedef.closest('.kart-renk-popup')?.classList.remove('goster');
+  const hedef = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="durum-sec"]');
+  if (hedef) {
+    const id = hedef.closest<HTMLElement>('[data-kart]')?.dataset.kart ?? '';
+    eylemler.hizliDurum(id, (hedef as HTMLSelectElement).value as Durum);
+    return;
+  }
+  const renk = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="renk-ozel"]');
+  if (!renk) return;
+  const kart = renk.closest<HTMLElement>('[data-kart]');
+  eylemler.renkKaydet(kart?.dataset.kart ?? '', (renk as HTMLInputElement).value);
+  renk.closest('.kart-renk-popup')?.classList.remove('goster');
 }

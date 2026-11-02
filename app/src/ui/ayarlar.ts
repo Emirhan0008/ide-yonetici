@@ -6,6 +6,7 @@ import {
 import { projeleriTopluYaz } from '../data/projeler';
 import { gorseliKucult, gorselleriGocEt } from '../data/gorseller';
 import { $, bildirim, esc } from './dom';
+import { SURUM } from '../verziyon';
 
 interface AyarCtx {
   uid(): string | null;
@@ -89,6 +90,15 @@ function listeRender(): void {
       `JSON yükleme mevcut verilerin ÜZERİNE yazar.`
     : 'Giriş yapılmamış.';
 
+  const bilgiEl = $('ayar-veri-bilgi');
+  bilgiEl.innerHTML += `<br>Sürüm: <b>v${SURUM}</b>`;
+  const sonYedek = localStorage.getItem('son_yedek');
+  const yedekGun = sonYedek ? Math.floor((Date.now() - Date.parse(sonYedek)) / 86400000) : null;
+  if (durum.kullanici) {
+    if (yedekGun === null) bilgiEl.innerHTML += '<br>💡 Henüz bu tarayıcıdan yedek indirmedin — ara sıra JSON yedek almak iyi bir alışkanlık.';
+    else if (yedekGun >= 7) bilgiEl.innerHTML += `<br>⚠ Son yedekten ${yedekGun} gün geçti — bir yedek indirmenin zamanı gelmiş.`;
+  }
+
   // Eski formatta (kart içinde 2MB'a varan base64) görsel taşıyan proje sayısı
   const gocAdedi = durum.projeler.filter((p) => !!p.kart_gorseli).length;
   const gocBilgi = $('ayar-goc-bilgi');
@@ -122,6 +132,7 @@ function disaAktar(): void {
   a.download = `ide-yonetici-yedek-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
+  localStorage.setItem('son_yedek', new Date().toISOString());
   bildirim('Yedek indirildi');
 }
 

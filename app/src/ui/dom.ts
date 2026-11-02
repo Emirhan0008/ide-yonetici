@@ -35,12 +35,36 @@ export function getIdeIcon(adi: string): string {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
-export function bildirim(msg: string, tip: 'ok' | 'err' = 'ok'): void {
+
+/** İsteğe bağlı eylem butonlu bildirim (toast).
+ *  - `tip` boşsa eski 'ok' davranışı birebir korunur (✅ + .toast.ok).
+ *  - `eylem` verilirse metnin yanına .toast-eylem butonu eklenir (textContent,
+ *    innerHTML kullanılmaz — XSS koruması) ve süre 6000 ms'ye çıkar.
+ *  Geriye dönük uyum: iki parametreli eski çağrılar aynı davranır. */
+export function bildirim(
+  mesaj: string,
+  tip: '' | 'err' = '',
+  eylem?: { etiket: string; onClick: () => void },
+): void {
   const t = $('toast');
-  t.textContent = (tip === 'ok' ? '✅ ' : '❌ ') + msg;
-  t.className = `toast ${tip} show`;
+  const tamam = tip !== 'err';
+  // textContent atamak önceki eylem butonunu da temizler (buton bir daha eklenmez).
+  t.textContent = (tamam ? '✅ ' : '❌ ') + mesaj;
+  t.className = `toast ${tamam ? 'ok' : 'err'} show`;
+  if (eylem) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-eylem';
+    btn.textContent = eylem.etiket;
+    btn.addEventListener('click', () => {
+      if (toastTimer) clearTimeout(toastTimer);
+      t.classList.remove('show');
+      eylem.onClick();
+    });
+    t.appendChild(btn);
+  }
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  toastTimer = setTimeout(() => t.classList.remove('show'), eylem ? 6000 : 2500);
 }
 
 /** Filtre/datalist için benzersiz, tr-sıralı liste (eski koleksiyonTopla). */
@@ -56,4 +80,26 @@ export function benzersizListe(degerler: string[]): string[] {
     sonuc.push(t);
   });
   return sonuc.sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+/** Odak tuzağı: kap içinde Tab dolaşımını kilitler. Dönen fonksiyon tuzağı kaldırır. */
+export function odakTuzağı(kap: HTMLElement): () => void {
+  const secum = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const klavye = (e: KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const ogeler = Array.from(kap.querySelectorAll<HTMLElement>(secum)).filter((el) => el.offsetParent !== null);
+    if (ogeler.length === 0) return;
+    const ilk = ogeler[0];
+    const son = ogeler[ogeler.length - 1];
+    const aktif = document.activeElement as HTMLElement | null;
+    if (e.shiftKey && (aktif === ilk || !kap.contains(aktif))) {
+      e.preventDefault();
+      son.focus();
+    } else if (!e.shiftKey && (aktif === son || !kap.contains(aktif))) {
+      e.preventDefault();
+      ilk.focus();
+    }
+  };
+  kap.addEventListener('keydown', klavye);
+  return () => kap.removeEventListener('keydown', klavye);
 }

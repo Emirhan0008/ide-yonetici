@@ -102,6 +102,25 @@ $('stats').addEventListener('click', (e) => {
   if (sonDurum) render(sonDurum);
 });
 
+/* ===== Klavye kısayolları: N yeni proje, / arama ===== */
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const hedef = e.target as HTMLElement;
+  const yaziMi = hedef.tagName === 'INPUT' || hedef.tagName === 'TEXTAREA' || hedef.tagName === 'SELECT' || hedef.isContentEditable;
+  if (yaziMi) return;
+  const panelAcik = $('modal-overlay').classList.contains('show')
+    || $('ayar-overlay').classList.contains('show')
+    || $('sil-overlay').classList.contains('show');
+  if (panelAcik) return;
+  if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault();
+    modalAc();
+  } else if (e.key === '/') {
+    e.preventDefault();
+    ($('ara') as HTMLInputElement).focus();
+  }
+});
+
 /* ===== Kart eylemleri ===== */
 const kartEylemleri = {
   duzenle(id: string): void {
@@ -130,10 +149,16 @@ const kartEylemleri = {
     const u = uid();
     return u ? gorselOku(u, id) : Promise.resolve(null);
   },
+  etiketSec(etiket: string): void {
+    const araKutusu = $<HTMLInputElement>('ara');
+    araKutusu.value = etiket;
+    araKutusu.focus();
+    if (sonDurum) render(sonDurum);
+  },
 };
 
 /* ===== Filtre + render ===== */
-(['ara', 'f-durum', 'f-tur', 'f-ide', 'f-sahiplik'] as const).forEach((id) => {
+(['ara', 'f-durum', 'f-tur', 'f-ide', 'f-sahiplik', 'f-sira'] as const).forEach((id) => {
   $(id).addEventListener('input', () => sonDurum && render(sonDurum));
   $(id).addEventListener('change', () => sonDurum && render(sonDurum));
 });
@@ -156,9 +181,15 @@ function filtreliListe(durum: AppState): Proje[] {
       return true;
     })
     .sort((a, b) => {
-      const ta = a.olusturma_tarihi || a.guncelleme_tarihi || a.id || '';
-      const tb = b.olusturma_tarihi || b.guncelleme_tarihi || b.id || '';
-      return ta < tb ? 1 : ta > tb ? -1 : 0;
+      const sira = $<HTMLSelectElement>('f-sira').value || 'guncel';
+      const guncelKey = (p: Proje): string => p.guncelleme_tarihi || p.olusturma_tarihi || p.id || '';
+      switch (sira) {
+        case 'yeni': return (b.olusturma_tarihi || '').localeCompare(a.olusturma_tarihi || '');
+        case 'eski': return (a.olusturma_tarihi || '').localeCompare(b.olusturma_tarihi || '');
+        case 'az': return a.proje_adi.localeCompare(b.proje_adi, 'tr');
+        case 'ide': return a.ide_adi.localeCompare(b.ide_adi, 'tr') || a.proje_adi.localeCompare(b.proje_adi, 'tr');
+        default: return guncelKey(b).localeCompare(guncelKey(a));
+      }
     });
 }
 

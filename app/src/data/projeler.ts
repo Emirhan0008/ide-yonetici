@@ -25,6 +25,11 @@ export async function projeSil(uid: string, id: string): Promise<void> {
   await remove(ref(db, kullaniciYolu(uid, `projeler/${id}`)));
 }
 
+/** Silme-geri-alma: silinen kaydı kendi anahtarına geri yazar (id korunur). */
+export async function projeGeriYukle(uid: string, id: string, veri: Omit<Proje, 'id'>): Promise<void> {
+  await set(ref(db, kullaniciYolu(uid, `projeler/${id}`)), veri);
+}
+
 /** Kart üstündeki hızlı durum değiştirme — tek alan yazar. */
 export async function hizliDurum(uid: string, id: string, durum: Durum): Promise<void> {
   await update(ref(db, kullaniciYolu(uid, `projeler/${id}`)), {

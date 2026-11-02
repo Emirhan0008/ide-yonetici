@@ -2,9 +2,10 @@
 // Kurallar (agent.md): taslak 300ms debounce; taslak kaydı modalKapat içinde/sonrasında
 // tetiklenmez; overlay kapanışı mousedown+click çapraz kontrolüyle yapılır.
 import type { Durum, IdeTuru, Proje, ProjeForm, Sahiplik } from '../model';
-import { projeEkle, projeGuncelle, projeSil } from '../data/projeler';
+import { projeEkle, projeGuncelle, projeGeriYukle, projeSil } from '../data/projeler';
 import { gorselOku, gorseliKucult, gorselSil, gorselYaz } from '../data/gorseller';
-import { $, bildirim } from './dom';
+import { $, bildirim, odakTuzağı } from './dom';
+import { getState } from '../store';
 import { rastgeleRenk } from './renkler';
 
 const TASLAK_ANAHTAR = 'proje_taslak';
@@ -19,6 +20,8 @@ let taslakTimer: ReturnType<typeof setTimeout> | null = null;
 let overlayTiklamaBaslangic: EventTarget | null = null;
 /** Görsel kararı: null=dokunma, 'sil'=kaldır, string=yeni küçültülmüş data-url yaz. */
 let gorselKarar: string | 'sil' | null = null;
+let modalTuzak: (() => void) | null = null;
+let silTuzağı: (() => void) | null = null;
 
 const deger = (id: string): string => ($(id) as HTMLInputElement).value.trim();
 
@@ -145,6 +148,8 @@ export function modalAc(proje?: Proje): void {
 
   $('modal-overlay').classList.add('show');
   document.body.classList.add('modal-lock');
+  if (modalTuzak) modalTuzak();
+  modalTuzak = odakTuzağı($('modal-overlay').querySelector('.modal') ?? $('modal-overlay'));
 }
 
 export function modalKapat(): void {
@@ -152,6 +157,7 @@ export function modalKapat(): void {
   if (taslakTimer) { clearTimeout(taslakTimer); taslakTimer = null; }
   $('modal-overlay').classList.remove('show');
   document.body.classList.remove('modal-lock');
+  if (modalTuzak) { modalTuzak(); modalTuzak = null; }
 }
 
 /* ===== Silme onayı ===== */
@@ -160,10 +166,13 @@ export function silOnayAc(id: string, ad: string): void {
   silId = id;
   $('sil-proje-adi').textContent = ad;
   $('sil-overlay').classList.add('show');
+  if (silTuzağı) silTuzağı();
+  silTuzağı = odakTuzağı($('sil-overlay').querySelector('.modal') ?? $('sil-overlay'));
 }
 function silKapat(): void {
   silId = null;
   $('sil-overlay').classList.remove('show');
+  if (silTuzağı) { silTuzağı(); silTuzağı = null; }
 }
 
 /* ===== Kurulum (bir kez) ===== */
@@ -186,10 +195,28 @@ export function modalKur(baglam: ModalCtx): void {
     const uid = ctx ? ctx.uid() : null;
     if (!uid || !silId) return;
     const id = silId;
+    const silinen = getState().projeler.find((p) => p.id === id);
     silKapat();
-    await projeSil(uid, id);
-    await gorselSil(uid, id).catch(() => undefined);
-    bildirim('Silindi');
+    try {
+      await projeSil(uid, id);
+      // Görsel ayrı yolda: silinmeden hemen oku ki Geri Al geri koyabilsin.
+      const gorsel = await gorselOku(uid, id).catch(() => null);
+      await gorselSil(uid, id).catch(() => undefined);
+      if (!silinen) { bildirim('Silindi'); return; }
+      const { id: _id, ...veri } = silinen;
+      bildirim('Proje silindi', '', {
+        etiket: 'Geri Al',
+        onClick: () => {
+          void projeGeriYukle(uid, id, veri).then(() => {
+            if (gorsel) void gorselYaz(uid, id, gorsel).catch(() => undefined);
+            bildirim('Proje geri alındı');
+          }).catch(() => bildirim('Geri alınamadı', 'err'));
+        },
+      });
+    } catch (e) {
+      console.error('[sil]', e);
+      bildirim('Silinemedi', 'err');
+    }
   });
 
   $('kaydet-btn').addEventListener('click', kaydet);

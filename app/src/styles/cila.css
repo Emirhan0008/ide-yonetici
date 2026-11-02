@@ -44,3 +44,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   .stat{padding:8px 10px;gap:8px}
   .sayim{width:100%;margin-left:0}
 }
+
+/* Toast içi eylem butonu (Geri Al vb.) */
+.toast-eylem{display:inline-block;margin-left:12px;background:var(--accent2);color:#fff;border:none;
+  border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.toast-eylem:hover{filter:brightness(1.15)}

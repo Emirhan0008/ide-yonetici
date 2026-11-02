@@ -12,6 +12,7 @@ async function sahteOturum(page: Page) {
   await page.goto('/');
   // main.ts modülü (ve DEV kancası) yüklenene kadar bekle — race condition koruması.
   await page.waitForFunction('window.__test !== undefined', null, { timeout: 10_000 });
+  await page.waitForFunction('window.__test.getState().oturumHazir === true', null, { timeout: 10_000 });
   await page.evaluate((p) => {
     (window as any).__test.setState({
       kullanici: { uid: 'test', email: 'test@mail.com', ad: 'Test', resim: '' },
@@ -84,6 +85,7 @@ test('giriş yoksa giriş kapısı görünür', async ({ page }) => {
 test('açılışta yanlış boş-durum gösterilmez (iskelet → kartlar)', async ({ page }) => {
   await page.goto('/');
   await page.waitForFunction('window.__test !== undefined', null, { timeout: 10_000 });
+  await page.waitForFunction('window.__test.getState().oturumHazir === true', null, { timeout: 10_000 });
   // Oturum çözüldü ama veri henüz gelmedi → "proje yok" GÖSTERİLMEZ, iskelet görünür.
   await page.evaluate(() => {
     (window as any).__test.setState({
