@@ -5,70 +5,51 @@ Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için krit
 ## 🎯 Proje Vizyonu ve Durumu
 Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V2.5 (Stabil)** aşamasındadır.
 
-## 🛠️ Teknik Mimari ve Temel Prensip
-- **CANLI KAYNAK:** `public/index.html` Firebase Hosting üzerinden yayınlanır (`https://ideyonetici.web.app`). Tek geliştirme hedefi budur.
-- **ARŞİV:** Masaüstü `ide_yonetici.pyw` uygulaması `docs/archive/` altına taşındı; `cloudrun/` kaldırıldı. Lokal SQLite/HTTP backend artık kullanılmıyor.
-- **Kütüphane Kullanımı:** Frontend UI kütüphaneleri CDN üzerinden yüklenebilir (örn. Firebase SDK).
+## 🛠️ Teknik Mimari (GÜNCEL — V2.5 shim dönemi)
+- **CANLI KAYNAK:** `public/index.html` — tek dosya (HTML + CSS + JS, ~2.350 satır). Firebase Hosting üzerinden yayınlanır: `https://ideyonetici.web.app`.
+- **BACKEND YOK.** Eski Python masaüstü uygulaması (`docs/archive/ide_yonetici.pyw`) ve Cloud Run backend'i kaldırıldı.
+- **CloudShim (kritik kavram):** UI kodu tarihsel nedenlerle hâlâ `Utils.api('/api/...')` çağrıları kullanır. `index.html` içindeki shim (bkz. `[CloudShim] yüklendi` log'u, ~satır 2000+) bu fonksiyonu override edip çağrıları **doğrudan Firebase Realtime Database / Auth**'a yönlendirir:
+  - `GET /api/projeler` → `db.ref('users/$uid/projeler').once('value')`
+  - `POST` → `ref.push()`, `PUT` → `ref.update()`, `DELETE` → `ref.remove()`
+  - `/api/auth/google` → `firebase.auth().signInWithCredential(...)`
+  - `/api/istatistikler` → backend'e gitmez, bellekte hesaplanır.
+  - `BACKEND_ONLY` listesindeki yollar (bulut/yedekle vb.) bilerek hata fırlatır.
+- **Firebase SDK:** compat 10.7.1, CDN'den yüklenir (firebase-app / auth / database).
+- **Deploy:** `firebase deploy --only hosting` (Firebase projesi: `ideyonetici-em-2026`).
+
+### Yol haritası (kararlaştırıldı, başladı)
+Vite + vanilla TypeScript'e geçiş: `src/` altında modüler yapı (firebase.ts, model.ts, data/, ui/, store.ts), shim ölecek, UI `/api` taklidi yerine tipli veri fonksiyonları çağıracak. RTDB şeması **değişmeyecek** (yalnızca eklemeler). Hedef: modülerlik + tip güvenliği + hash'li asset ile cache sorunlarının bitmesi. Eski tek dosya dönüşüm sonrası `docs/archive/`'e taşınır.
+
+## 🗄️ Veri Katmanı (Firebase RTDB)
+- Kök: `users/$uid/` (rules: yalnızca kendi uid'sini okur/yazar — `database.rules.json`).
+- Alt yollar: `projeler/`, `ideler/`, `hesaplar/` (RTDB push-key'li nesne dizisi; `objeToArray()` ile diziye çevrilir, `id` alanı key'den gelir).
+- Proje alanları: `proje_adi, ide_adi, ide_turu, ide_url, hesap_adi, hesap_email, durum, sahiplik, notlar, etiketler, lokal_yol, deploy_url, kart_rengi, kart_gorseli, olusturma_tarihi, guncelleme_tarihi`.
+  - `kart_gorseli`: base64 data-url. **Not:** shim döneminde RTDB'ye yazılıyor (eski backend'de yazılmazdı). Vite geçişinde ayrı `users/$uid/gorseller/$projeId` yoluna + istemci tarafı küçültmeye taşınacak (Faz 2).
+  - `kart_rengi`: boşsa duruma göre otomatik renk.
+- Uygulama arka plan görseli `localStorage: app_bg_image`; taslak `localStorage: proje_taslak`; ilk açılış hızı için projeler listesi `localStorage`'da cache'lenir, sonra Firebase tazele.
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
+- **Durumlar:** "Bitti", "Yarım Kaldı", "Bitmedi ama çalışıyor", "Pasif", "Arşiv". "Devam Eden" = "Yarım Kaldı" + "Bitmedi ama çalışıyor".
+- **Taslak (V6):** 300ms debounce ile `localStorage: proje_taslak`. Taslak kaydı **asla** `modalKapat` içinde/sonrasında tetiklenmez.
+- **Modal güvenliği:** metin seçerken mouse dışarı kayarsa modal kapanmasın — `mousedown`/`click` overlay çapraz kontrolünü bozmayın.
+- **Lokal yol temizleme:** `f-lokal-yol` input'unda `paste`+`input` event'leri baş/son tırnakları temizler (Windows "Yol olarak kopyala" `"C:\yol"` formatı).
+- **Hızlı IDE/Hesap ekleme:** form içi "+" butonları `hizli-ide-panel` / `hizli-hesap-panel` açar; paneller birbirini kapatır; `modalAc()` içinde her ikisi de kapatılır.
+- **Auth:** Google Sign-In popup; redirect'e düşülürse `getRedirectResult()`. Çıkışta `firebase.auth().signOut()`.
+- **`yukle()` throttle:** 200ms içinde tekrar çağrılırsa aynı promise paylaşılır (in-flight cache).
 
-### Durum Sistemi
-- Durumlar: "Bitti", "Yarım Kaldı", "Bitmedi ama çalışıyor", "Pasif", "Arşiv"
-- İstatistikler: "Devam Eden" = "Yarım Kaldı" + "Bitmedi ama çalışıyor" toplamı
-
-### Taslak Sistemi (V6)
-- Taslaklar `localStorage`'da `proje_taslak` anahtarıyla tutulur.
-- **Debounce:** Yazım sırasında 300ms gecikme ile kaydedilir.
-- **Guard:** Taslak kaydı işlemi **asla** `modalKapat` fonksiyonu içinde veya sonrasında tetiklenmemelidir.
-
-### Modal Güvenliği
-- Input alanında metin seçerken mouse dışarı kayarsa modalın kapanmaması için `mousedown` ve `click` overlay üzerinde çapraz kontrol edilir. Bu mantığı bozmayın.
-
-### Veritabanı
-- Migrasyonlar `tablolari_olustur` içinde `try-except` bloklarıyla `ALTER TABLE` şeklinde yapılmalıdır.
-
-### Lokal Yol Temizleme
-- `_lokal_yol_temizle()` fonksiyonu backend'de tırnak temizler.
-- Frontend'de `f-lokal-yol` input'unda `paste` ve `input` event'leri de temizler.
-- Windows "Yol olarak kopyala" özelliği `"C:\yol"` formatında verir; bu otomatik temizlenir.
-
-### Firebase Sıkıştırma Sistemi (V2.5)
-- Firebase'e gönderilen veri `zlib` (level 9) ile sıkıştırılır, `base64` ile encode edilir.
-- `kart_gorseli` (Base64 görsel) Firebase'e **gönderilmez** — lokal DB'de kalır.
-- Tipik tasarruf: **%60-75** (14 proje: 8.3KB → 3.1KB).
-- Geri yükleme: `_veriyi_ac()` eski format (ham JSON) ile de uyumludur.
-- Firebase'deki yapı: `{ meta: {...}, sikis: { v:1, z:"base64...", boyut_ham, boyut_sikis, oran } }`
-- `kart_rengi`: Kullanıcı seçimi. Boş ise durum rengine göre otomatik.
-- `kart_gorseli`: Base64 encoded görsel. DB'de TEXT olarak saklanır. Max 2MB.
-- Görsel kart arka planında `blur(8px) opacity(0.18)` ile gösterilir.
-- Uygulama arka planı `localStorage`'da `app_bg_image` anahtarıyla saklanır.
-
-### Hızlı IDE/Hesap Ekleme (V2.5)
-- Form içindeki "+" butonları `hizli-ide-panel` / `hizli-hesap-panel` div'lerini açar.
-- Paneller birbirini kapatır (aynı anda ikisi açık olamaz).
-- `hizliIdeKapat()` ve `hizliHesapKapat()` `modalAc()` içinde çağrılır.
-
-### Kimlik Doğrulama (V2.5 Hosting)
-- `public/index.html` shim'i Firebase Auth (Google Sign-In popup) kullanır.
-- Kullanıcının `uid`'si Realtime Database'de `users/$uid` path'inde izole edilir (bkz. `database.rules.json`).
-- `firebase_ayarlar.json` **artık kullanılmıyor** (legacy dosya, shim hardcode edilmiş). İleride runtime config gerekirse shim'e taşınmalı.
-
-## 📂 Önemli Dosyalar ve Konumlar
-- `public/index.html`: Firebase Hosting frontend'i (tek canlı kaynak: shim + UI).
-- `docs/archive/ide_yonetici.pyw`: Arşivlenen masaüstü uygulaması (artık çalıştırılmaz, referans için saklanır).
-- `docs/archive/`: Eski PRD'ler ve uygulanmamış planlar.
-
-## 🗄️ Veritabanı Şeması (projeler tablosu)
-```
-id, proje_adi, ide_adi, ide_turu, ide_url, hesap_adi, hesap_email,
-durum, notlar, son_guncelleme, olusturma_tarihi, etiketler,
-lokal_yol, deploy_url, kart_rengi, kart_gorseli
-```
+## 📂 Önemli Dosyalar
+- `public/index.html` — tek canlı kaynak.
+- `docs/archive/ide_yonetici.pyw` — arşiv masaüstü uygulaması (referans).
+- `docs/archive/PRD-v3.0-uygulanmamis.md` — uygulanmamış eski plan.
+- `firebase.json` — hosting + no-store header'ları + cleanUrls; `database.rules.json` — kullanıcı yalıtımı.
 
 ## 🚀 İş Akışı ve Doğrulama
-1. **Geliştirme:** `public/index.html` içindeki JS/CSS kodlarını güncelleyin.
-2. **Yenileme:** Tarayıcıda `Ctrl+F5` yapın.
-3. **Deploy:** Frontend değişikliklerini `firebase deploy --only hosting` ile yayınlayın.
+1. `public/index.html` düzenle.
+2. Tarayıcıda `Ctrl+F5` ile test et (header'lar `no-store` ama yine de yapın).
+3. `firebase deploy --only hosting` ile yayınla.
+4. Tanılama: uygulama içi Ayarlar paneli `/api/diagnostic`'i shim üzerinden yanıtlar (artık gerçek bir backend uç noktası yoktur).
 
 ## ⚠️ Bilinen "Gotcha"lar
-- **Tarayıcı Cache:** Hosting header'ları `no-store` zorlar; yine de testte `Ctrl+F5` yapın.
+- **Tarayıcı Cache:** `no-store` header'larına rağmen eski sürüm görünürse `Ctrl+F5`.
+- **Bayat belge uyarısı:** README/agent.md dışında kalan eski commit mesajları ve `.kiro/specs` eski masaüstü/SQLite dönemini anlatır; mimariyi yorumlarken bu dosyayı referans alın.
+- **Compat SDK:** `firebase.compat.js` kasıtlı; modular SDK geçişi Vite fazında yapılacak.

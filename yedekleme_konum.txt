@@ -1,6 +1,8 @@
 Yedekleme konumu: W:\Yedekler\IDE_Yonetici\
-- yedekler/         → otomatik JSON yedekler
-- ide_yonetici_son_yedek.json   → en son manuel yedek
+
+- yedekler/                         → otomatik JSON yedekler (eski masaüstü döneminden kalma)
+- ide_yonetici_son_yedek.json       → en son manuel yedek (repo kökünde)
 
 Bu dosyalar .gitignore'da olduğu için repoda takip edilmez.
-Geri yükleme için arşivden kopyalayıp repo köküne koyun.
+Canlı veri artık Firebase RTDB'de (users/$uid); JSON yedekler yalnızca eski dönem arşividir.
+Geri yükleme: uygulamadaki "İçe Aktar" ile JSON dosyası seçilir (bkz. agent.md → Veri Katmanı).

@@ -25,7 +25,7 @@ yarn.lock
 .DS_Store
 Thumbs.db
 
-# ===== Çıktılar =====
+# ===== Üretim / Build =====
 build/
 dist/
 *.spec
@@ -38,18 +38,19 @@ dist/
 test_*.py
 tests/
 
-# ===== Çevre değişkenleri =====
-.env
-.env.*
-
 # ===== Test coverage =====
 coverage/
 htmlcov/
 .coverage
 .coverage.*
 
+# ===== Çevre değişkenleri =====
+.env
+.env.*
+
 # ===== Proje özel =====
 firebase_ayarlar.json
 ide_yonetici_son_yedek.json
 .kiro/
 .firebase/
+yedekler/

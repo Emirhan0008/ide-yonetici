@@ -47,7 +47,7 @@ firebase deploy --only hosting
 
 *   **Build Alma:** Masaüstü build kaldırıldı. Arayüz değişikliği için `public/index.html` düzenlenip `firebase deploy --only hosting` yapılır.
 
-*   **Tanılama:** Backend'in ayakta olduğunu `/api/diagnostic` uç noktasından doğrulayın.
+*   **Tanılama:** Backend yoktur. Uygulama içi Ayarlar panelindeki tanı bilgisi, `public/index.html` içindeki CloudShim'in Firebase Realtime Database bağlantısının durumunu gösterir.
 
 *   **Akıllı Dökümantasyon:** Proje mimarisi, fonksiyonel kurallar ve "gotcha"lar için [agent.md](agent.md) dosyasını inceleyin.
 
