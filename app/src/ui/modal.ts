@@ -136,7 +136,7 @@ export function modalAc(proje?: Proje): void {
     } else {
       const uid = ctx.uid();
       const sabitId = proje.id;
-      if (uid) void gorselOku(uid, sabitId).then((d) => { if (d && duzenlemeId === sabitId) onizlemeGoster(d); });
+      if (uid) void gorselOku(uid, sabitId).then((d) => { if (d && duzenlemeId === sabitId) onizlemeGoster(d); }).catch(() => undefined);
     }
   } else {
     formDoldur({});
