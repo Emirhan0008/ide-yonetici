@@ -17,8 +17,13 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - **Firebase SDK:** compat 10.7.1, CDN'den yüklenir (firebase-app / auth / database).
 - **Deploy:** `firebase deploy --only hosting` (Firebase projesi: `ideyonetici-em-2026`).
 
-### Yol haritası (kararlaştırıldı, başladı)
-Vite + vanilla TypeScript'e geçiş: `src/` altında modüler yapı (firebase.ts, model.ts, data/, ui/, store.ts), shim ölecek, UI `/api` taklidi yerine tipli veri fonksiyonları çağıracak. RTDB şeması **değişmeyecek** (yalnızca eklemeler). Hedef: modülerlik + tip güvenliği + hash'li asset ile cache sorunlarının bitmesi. Eski tek dosya dönüşüm sonrası `docs/archive/`'e taşınır.
+### Yol haritası — DURUM: Faz 1 tamam (iskelet `app/` altında)
+Vite + vanilla TypeScript'e geçiş sürüyor. **Faz 1 inşa edildi:**
+- `app/` = bağımsız Vite projesi (`npm run dev` / `npm run build`, çıktı `app/dist`).
+- `src/firebase.ts` modular SDK v13 · `src/model.ts` tipler · `src/store.ts` tipli state · `src/auth.ts` popup+redirect giriş · `src/data/` tek veri kapısı (projeler, tanimlilar, gorseller, rtdb yardımcıları).
+- `data/gorseller.ts` Faz 2 boru hattını içeriyor: `gorseliKucult` (800px JPEG) + ayrı `users/$uid/gorseller/$projeId` yolu + `gorselleriGocEt` (bir defalık migration).
+- RTDB şeması değişmedi; canlı site hâlâ `public/index.html`. **Flag day:** Faz 3 UI taşınımı bitince `firebase.json` → `public: "app/dist"`, eski dosya `docs/archive/`'e.
+- Kalan: Faz 3 (UI modülleri: kartlar, modal, taslak, tema, renk, ayarlar), Faz 4 (hedefli DOM güncelleme + Playwright smoke testleri).
 
 ## 🗄️ Veri Katmanı (Firebase RTDB)
 - Kök: `users/$uid/` (rules: yalnızca kendi uid'sini okur/yazar — `database.rules.json`).

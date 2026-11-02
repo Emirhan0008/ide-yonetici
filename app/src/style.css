@@ -1,0 +1,31 @@
+/* Faz 1 iskeleti — asıl tema/stiller Faz 3'te ui/ altında modül modül taşınacak. */
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light dark;
+}
+body {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+}
+.kutu {
+  max-width: 40rem;
+  padding: 1.5rem;
+}
+.satir {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+}
+.ozet {
+  font-variant-numeric: tabular-nums;
+}
