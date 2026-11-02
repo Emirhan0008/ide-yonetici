@@ -112,6 +112,8 @@ function kartHTML(p: Proje, ara: string): string {
 }
 
 const dinlenenler = new WeakMap<HTMLElement, KartEylemleri>();
+/** Son basılan kart HTML'lerinin önbelleği (id → html) — hedefli güncelleme için. */
+const kartOnbellek = new WeakMap<HTMLElement, Map<string, string>>();
 
 /** Oturum/veri beklenirken gösterilen parıltılı kart iskeleti (boş durumları gizler). */
 export function yuklemeIskeleti(adet = 8): string {
@@ -130,8 +132,33 @@ export function renderGrid(
       <div class="empty-icon">🔍</div>
       <div class="empty-text">Gösterilecek proje yok.</div>
     </div>`;
+    kartOnbellek.set(konteyner, new Map());
   } else {
-    konteyner.innerHTML = liste.map((p) => kartHTML(p, ara)).join('');
+    // Hedefli güncelleme: HTML'i değişmemiş kartların DOM düğümü yerinde korunur.
+    const oncekiler = kartOnbellek.get(konteyner) ?? new Map<string, string>();
+    const mevcut = new Map<string, HTMLElement>();
+    konteyner.querySelectorAll<HTMLElement>(':scope > [data-kart]').forEach((el) => {
+      const kartId = el.dataset.kart ?? '';
+      if (!mevcut.has(kartId)) mevcut.set(kartId, el);
+    });
+    const sonraki = new Map<string, string>();
+    const fragman = document.createDocumentFragment();
+    for (const p of liste) {
+      const html = kartHTML(p, ara);
+      sonraki.set(p.id, html);
+      const eski = mevcut.get(p.id);
+      if (eski && oncekiler.get(p.id) === html) {
+        fragman.appendChild(eski); // düğüm aynen taşınır: titreme/odak kaybı yok
+      } else {
+        const sablon = document.createElement('template');
+        sablon.innerHTML = html.trim();
+        fragman.appendChild(sablon.content.firstElementChild as HTMLElement);
+      }
+      mevcut.delete(p.id);
+    }
+    konteyner.textContent = ''; // süzgeç dışı kalanlar + boş-durum düğümü silinir
+    konteyner.appendChild(fragman);
+    kartOnbellek.set(konteyner, sonraki);
   }
 
   // Delegasyonu yalnızca ilk render'da bağla; eylem güncellemeleri WeakMap'ten okunur.
@@ -152,6 +179,7 @@ export function renderGrid(
   if (eylemler.gorselGetir) {
     konteyner.querySelectorAll<HTMLElement>('[data-gorsel-yukle]').forEach((el) => {
       const id = el.dataset.gorselYukle as string;
+      delete el.dataset.gorselYukle; // aynı düğüm için ikinci kez istek atılmaz
       eylemler.gorselGetir?.(id).then((data) => {
         if (!data) return;
         el.style.backgroundImage = `url('${data}')`;
