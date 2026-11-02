@@ -246,3 +246,8 @@ aboneOl((durum) => {
   if (avatarDegisti) avatarGuncelle(durum);
   render(durum);
 });
+
+// Yalnızca geliştirme modunda: smoke testlerin sahte veri/enjeksiyon için kullanacağı kapı.
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__test = { setState, getState: () => sonDurum };
+}

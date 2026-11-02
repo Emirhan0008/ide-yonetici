@@ -4,7 +4,7 @@ import {
   hesapEkle, hesapSil, ideEkle, ideSil, tanimlilariTopluYaz,
 } from '../data/tanimlilar';
 import { projeleriTopluYaz } from '../data/projeler';
-import { gorseliKucult } from '../data/gorseller';
+import { gorseliKucult, gorselleriGocEt } from '../data/gorseller';
 import { $, bildirim, esc } from './dom';
 
 interface AyarCtx {
@@ -88,6 +88,21 @@ function listeRender(): void {
       `Bulutta: <b>${durum.projeler.length}</b> proje · <b>${durum.ideler.length}</b> IDE · <b>${durum.hesaplar.length}</b> hesap<br>` +
       `JSON yükleme mevcut verilerin ÜZERİNE yazar.`
     : 'Giriş yapılmamış.';
+
+  // Eski formatta (kart içinde 2MB'a varan base64) görsel taşıyan proje sayısı
+  const gocAdedi = durum.projeler.filter((p) => !!p.kart_gorseli).length;
+  const gocBilgi = $('ayar-goc-bilgi');
+  const gocBtn = $('ayar-goc');
+  if (gocAdedi > 0) {
+    gocBilgi.style.display = '';
+    gocBilgi.innerHTML = `${gocAdedi} projede <b>eski biçim</b> gömülü kart görseli var. Taşıma bunları küçültüp ayrı alana (` +
+      `<code>gorseller/</code>) koyar; proje listesi hafifler, görseller tembel yüklenir.`;
+    gocBtn.style.display = '';
+    gocBtn.textContent = `🔄 Eski Kart Görsellerini Taşı (${gocAdedi})`;
+  } else {
+    gocBilgi.style.display = 'none';
+    gocBtn.style.display = 'none';
+  }
 }
 
 /* ===== Yedek ===== */
@@ -235,4 +250,26 @@ export function ayarlarKur(baglam: AyarCtx): void {
     (e.target as HTMLInputElement).value = '';
   });
   $('ayar-bg-kaldir').addEventListener('click', arkaPlanKaldir);
+
+  // Bir defalık görsel göçü (eski inline kart_gorseli → gorseller/ yolu + küçültme)
+  $('ayar-goc').addEventListener('click', async () => {
+    const uid = ctx ? ctx.uid() : null;
+    if (!uid) return;
+    const adaylar = getState().projeler.filter((p) => !!p.kart_gorseli);
+    if (adaylar.length === 0) return;
+    if (!confirm(`${adaylar.length} projedeki gömülü görseller küçültülüp taşınacak. Devam?`)) return;
+    const btn = $('ayar-goc') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = '⏳ Taşınıyor…';
+    try {
+      const tasinan = await gorselleriGocEt(uid, adaylar);
+      bildirim(`${tasinan} görsel taşındı`);
+      listeRender();
+    } catch (e) {
+      console.error('[ayarlar] göç:', e);
+      bildirim('Göç başarısız', 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
