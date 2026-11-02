@@ -27,6 +27,7 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - localStorage anahtarları: `proje_taslak` (taslak), `app_tema` (tema), `app_bg_image` (uygulama arka planı, 1280px JPEG).
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
+- **Açılış durum makinesi (flash koruması):** `store` içindeki `oturumHazir` (auth ilk kez çözüldü) ve `veriHazir` (projeler ilk snapshot geldi) bayraklarıdır. Kural: ikisi çözülmeden grid'de **iskelet** görünür (`kartlar.yuklemeIskeleti`); giriş kapısı ancak `oturumHazir`, "Gösterilecek proje yok" ancak `veriHazir` iken basılır. Kullanıcı oturumuyla "giriş yap → proje yok → projeler" flash'ı 2026-11'de bu şekilde giderildi (dizi örnekleme testi: iskelet→kartlar).
 - **Durumlar:** "Bitti", "Yarım Kaldı", "Bitmedi ama çalışıyor", "Pasif", "Arşiv". "Devam Eden" = `model.devmEdiyorMu()` — başka yerde kural yazmayın. Filtre kutusunda sihirli değer `"devam"`.
 - **Taslak (V6):** 300ms debounce ile `localStorage: proje_taslak`; yalnızca YENİ proje formunda; taslak kaydı **asla** `modalKapat` içinde/sonrasında tetiklenmez.
 - **Modal güvenliği:** overlay kapanışı `mousedown`+`click` çapraz kontrolüyle (metin seçerken mouse dışarı kayarsa kapanmaz) — `modal.ts`/`ayarlar.ts` kalıbını bozmayın.
