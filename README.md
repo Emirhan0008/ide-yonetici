@@ -1,9 +1,9 @@
-# 🛠️ IDE Proje Takip Sistemi v2.5
+# 🛠️ IDE Proje Takip Sistemi v3
 
 Bulut (Cursor, Replit, Cloud9 vb.) ve lokal geliştirme ortamlarındaki projelerinizi tek merkezden yönetmenizi sağlayan, hafif ve modern bir takip aracı.
 
-![Version](https://img.shields.io/badge/Version-2.5-blue?style=for-the-badge)
-![Python](https://img.shields.io/badge/Python-3.x-green?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-3.0-blue?style=for-the-badge)
+![TypeScript](https://img.shields.io/badge/TypeScript-Vite_+_%232F74C0?style=for-the-badge&logo=typescript&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-orange?style=for-the-badge)
 
 ---
@@ -28,15 +28,21 @@ Bulut (Cursor, Replit, Cloud9 vb.) ve lokal geliştirme ortamlarındaki projeler
 ### 2. Standalone Executable — ARŞİVLENDİ
 Masaüstü `.exe` üretimi kaldırıldı (`build/` yalnızca geçmiş çıktıları içerir).
 
-### 3. Firebase Hosting (Sadece Web Arayüzü)
-Frontend public build'i Firebase Hosting üzerinden yayınlanır:
+### 3. Web Uygulaması (Vite + TypeScript) — CANLI KAYNAK
+Arayüz `app/` altında modüler bir Vite + TypeScript projesidir ve Firebase Hosting üzerinden yayınlanır:
 
 ```bash
-firebase deploy --only hosting
+cd app
+npm install        # ilk sefer
+npm run dev        # geliştirme: http://localhost:5199
+npm test           # Playwright duman testleri (8 senaryo)
+npm run build      # üretim çıktısı: app/dist
+firebase deploy --only hosting   # repo kökünden yayın
 ```
 - `https://ideyonetici.web.app` adresinden erişilir.
 - Veriler kullanıcının Google hesabı ile Firebase Realtime Database'de izole edilir (`users/$uid` kuralları).
-- Kimlik doğrulama `public/index.html` içindeki Firebase Auth shim'i üzerinden yapılır.
+- Kimlik doğrulama Firebase Auth (Google) ile doğrudan yapılır; backend yoktur.
+- Cache: HTML `no-store`, hash'li asset'ler (`/assets/*`) 1 yıl `immutable` — güncellemede yalnızca değişen dosya iner.
 
 ### 4. Cloud Run (Backend) — KALDIRILDI
 `cloudrun/` klasörü kaldırıldı. Backend ihtiyacı yoktur; veriler Firebase Realtime Database'de tutulur.
@@ -45,9 +51,9 @@ firebase deploy --only hosting
 
 ## 🧪 Geliştiriciler İçin
 
-*   **Build Alma:** Masaüstü build kaldırıldı. Arayüz değişikliği için `public/index.html` düzenlenip `firebase deploy --only hosting` yapılır.
+*   **Build Alma:** `cd app && npm run build` → çıktı `app/dist` (firebase.json buradan yayınlar).
 
-*   **Tanılama:** Backend yoktur. Uygulama içi Ayarlar panelindeki tanı bilgisi, `public/index.html` içindeki CloudShim'in Firebase Realtime Database bağlantısının durumunu gösterir.
+*   **Tanılama:** Backend yoktur. Uygulama içi Ayarlar → Veri sekmesi, Firebase hesabını ve buluttaki veri sayılarını gösterir.
 
 *   **Akıllı Dökümantasyon:** Proje mimarisi, fonksiyonel kurallar ve "gotcha"lar için [agent.md](agent.md) dosyasını inceleyin.
 
@@ -59,13 +65,21 @@ firebase deploy --only hosting
 
 ```
 .
-├── public/index.html       # Frontend (Firebase Hosting için — tek canlı kaynak)
+├── app/                    # CANLI KAYNAK — Vite + TypeScript uygulaması
+│   ├── src/
+│   │   ├── data/           # TEK veri kapısı (RTDB) — projeler, tanimlilar, gorseller
+│   │   ├── ui/             # kartlar, modal, ayarlar, tema, dom yardımcıları
+│   │   ├── styles/         # tema / kartlar / modal / ayarlar / cila CSS modülleri
+│   │   ├── model.ts        # Alan tipleri + durum kuralları
+│   │   └── store.ts        # Tipli durum deposu (abone ol / setState)
+│   ├── e2e/                # Playwright duman testleri (npm test)
+│   └── dist/               # Build çıktısı (firebase.json buradan yayınlar)
 ├── firebase.json           # Firebase Hosting + RTDB config
 ├── database.rules.json     # Firebase RTDB güvenlik kuralları
 ├── agent.md                # Teknik hafıza / AI ajan yönergeleri
 ├── README.md               # Bu dosya
-├── docs/archive/           # Eski PRD'ler, planlar + arşivlenen masaüstü uygulaması (ide_yonetici.pyw)
-└── yedekler/               # Otomatik JSON yedekler (git-ignored, dış arşive taşınır)
+├── docs/archive/           # Eski PRD'ler + arşivlenen tek dosya v2.5 + masaüstü uygulaması
+└── yedekler/               # Eski otomatik JSON yedekler (git-ignored, dış arşive taşınır)
 ```
 
 ---
