@@ -60,9 +60,8 @@ export function renderKanban(kap: HTMLElement, liste: Proje[], eylemler: KanbanE
       e.preventDefault();
       kolon.classList.remove('hedef');
       const id = e.dataTransfer?.getData('text/plain') ?? '';
-      const durum = kolon.dataset.durum as Durum | undefined;
-      if (!id || !durum) return;
-      dinlenenler.get(kap)?.durumDegis(id, durum);
+      if (!id || !KANBAN_DURUMLAR.includes(kolon.dataset.durum as Durum)) return;
+      dinlenenler.get(kap)?.durumDegis(id, kolon.dataset.durum as Durum);
     });
   }
 }

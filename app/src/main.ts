@@ -14,7 +14,7 @@ import type { Durum, Proje } from './model';
 import { devamEdiyorMu } from './model';
 import type { AppState } from './store';
 import { aboneOl, istatistikHesapla, setState } from './store';
-import { $, benzersizListe, bildirim } from './ui/dom';
+import { $, benzersizListe, bildirim, esc } from './ui/dom';
 import { ayarlarAc, ayarlarKur, arkaPlanInit } from './ui/ayarlar';
 import { renderGrid, yuklemeIskeleti } from './ui/kartlar';
 import { renderKanban } from './ui/kanban';
@@ -41,7 +41,7 @@ function avatarGuncelle(durum: AppState): void {
   if (u) {
     btn.title = u.email;
     btn.innerHTML = u.resim
-      ? `<img src="${u.resim}" alt="" referrerpolicy="no-referrer">`
+      ? `<img src="${esc(u.resim)}" alt="" referrerpolicy="no-referrer">`
       : (u.email[0]?.toUpperCase() ?? '?');
     $('dd-email').textContent = u.email;
   } else {
@@ -137,7 +137,9 @@ const kartEylemleri = {
   hizliDurum(id: string, durum: Durum): void {
     const u = uid();
     if (!u) return;
-    void veriHizliDurum(u, id, durum).then(() => bildirim(`Durum: ${durum}`));
+    void veriHizliDurum(u, id, durum)
+      .then(() => bildirim(`Durum: ${durum}`))
+      .catch(() => bildirim('Durum güncellenemedi', 'err'));
   },
   renkKaydet(id: string, renk: string): void {
     const u = uid();
@@ -229,19 +231,19 @@ function render(durum: AppState): void {
     ...durum.projeler.map((p) => p.ide_adi),
     ...durum.ideler.map((i) => i.ide_adi),
   ]);
-  $('dl-ide').innerHTML = ideAdlari.map((i) => `<option value="${i}">`).join('');
+  $('dl-ide').innerHTML = ideAdlari.map((i) => `<option value="${esc(i)}">`).join('');
   const seciliIde = $<HTMLSelectElement>('f-ide').value;
   $<HTMLSelectElement>('f-ide').innerHTML =
     '<option value="">Tüm IDE\'ler</option>' +
-    ideAdlari.map((i) => `<option${i === seciliIde ? ' selected' : ''}>${i}</option>`).join('');
+    ideAdlari.map((i) => `<option value="${esc(i)}"${i === seciliIde ? ' selected' : ''}>${esc(i)}</option>`).join('');
   $('dl-hesap').innerHTML = benzersizListe([
     ...durum.projeler.map((p) => p.hesap_adi),
     ...durum.hesaplar.map((h) => h.hesap_adi),
-  ]).map((h) => `<option value="${h}">`).join('');
+  ]).map((h) => `<option value="${esc(h)}">`).join('');
   $('dl-email').innerHTML = benzersizListe([
     ...durum.projeler.map((p) => p.hesap_email),
     ...durum.hesaplar.map((h) => h.hesap_email || ''),
-  ]).map((e) => `<option value="${e}">`).join('');
+  ]).map((e) => `<option value="${esc(e)}">`).join('');
 
   const kartlar = $('kartlar');
   // Yükleme durumu: oturum çözülmemişse veya giriş yapıldıysa ama liste ilk kez gelmediyse
@@ -354,9 +356,13 @@ let gorunum: 'izgara' | 'kanban' = 'izgara';
 
 const kanbanEylemleri = {
   durumDegis(id: string, durum: Durum): void {
+    const mevcut = sonDurum?.projeler.find((x) => x.id === id);
+    if (mevcut && mevcut.durum === durum) return;
     const u = uid();
     if (!u) return;
-    void veriHizliDurum(u, id, durum).then(() => bildirim(`Durum: ${durum}`));
+    void veriHizliDurum(u, id, durum)
+      .then(() => bildirim(`Durum: ${durum}`))
+      .catch(() => bildirim('Durum güncellenemedi', 'err'));
   },
 };
 
@@ -379,6 +385,8 @@ let oncekiUid: string | null = null;
 authAboneOl((kullanici) => {
   if (oncekiUid === kullanici?.uid) { setState({ oturumHazir: true }); return; }
   oncekiUid = kullanici?.uid ?? null;
+  seciliKartlar.clear();
+  secimGoster();
   dinleyiciler.forEach((f) => f());
   dinleyiciler = kullanici
     ? [

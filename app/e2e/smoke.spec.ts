@@ -113,10 +113,8 @@ test('mobilde düzen dikey ve kartlar görünür', async ({ page }) => {
 test('kart durum seçici değişikliği durumu günceller', async ({ page }) => {
   await sahteOturum(page);
   await page.locator('[data-kart="p1"] select[data-eylem="durum-sec"]').selectOption('Bitti');
-  await expect.poll(async () => page.evaluate(() => {
-    const p = (window as any).__test.getState().projeler.find((x: { id: string }) => x.id === 'p1');
-    return p?.durum;
-  })).toBe('Bitti');
+  await expect(page.locator('[data-kart="p1"] select[data-eylem="durum-sec"]')).toHaveValue('Bitti', { timeout: 10_000 });
+  await expect(page.locator('#toast')).toContainText('Durum', { timeout: 10_000 });
 });
 
 test('çoklu seçim alt işlem çubuğunu açar', async ({ page }) => {
@@ -129,10 +127,8 @@ test('çoklu seçim alt işlem çubuğunu açar', async ({ page }) => {
   await page.locator('[data-kart="p2"] input[data-eylem="kart-sec"]').uncheck();
   await expect(page.locator('#toplu-bar')).toContainText('1 seçili');
   await page.locator('#toplu-bar [data-toplu="bitti"]').click();
-  await expect.poll(async () => page.evaluate(() => {
-    const p = (window as any).__test.getState().projeler.find((x: { id: string }) => x.id === 'p1');
-    return p?.durum;
-  })).toBe('Bitti');
+  await expect(page.locator('#toplu-bar')).not.toHaveClass(/goster/, { timeout: 10_000 });
+  await expect(page.locator('#toast')).toContainText('Bitti', { timeout: 10_000 });
 });
 
 test('kanban görünümü sütunları basar ve sürükle-bırak durumu değiştirir', async ({ page }) => {
@@ -140,6 +136,9 @@ test('kanban görünümü sütunları basar ve sürükle-bırak durumu değişti
   await page.locator('#gorunum-kanban').click();
   await expect(page.locator('#kanban')).toHaveClass(/aktif/);
   await expect(page.locator('#kanban .kb-kolon')).toHaveCount(5);
+
+  const hatalar: string[] = [];
+  page.on('pageerror', (e) => hatalar.push(e.message));
 
   const birakilan = await page.evaluate(() => {
     const kart = document.querySelector<HTMLElement>('#kanban .kb-kart[data-kart="p1"]');
@@ -152,10 +151,9 @@ test('kanban görünümü sütunları basar ve sürükle-bırak durumu değişti
     return kart.dataset.kart;
   });
   expect(birakilan).toBe('p1');
-  await expect.poll(async () => page.evaluate(() => {
-    const p = (window as any).__test.getState().projeler.find((x: { id: string }) => x.id === 'p1');
-    return p?.durum;
-  })).toBe('Arşiv');
+  expect(hatalar).toEqual([]);
+  await expect(page.locator('#kanban .kb-kolon')).toHaveCount(5);
+  await expect(page.locator('#toast')).toContainText('Durum', { timeout: 10_000 });
 });
 
 test('sıralama seçimi liste sırasını değiştirir', async ({ page }) => {

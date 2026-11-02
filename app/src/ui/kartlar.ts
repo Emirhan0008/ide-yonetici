@@ -55,7 +55,7 @@ function kartHTML(p: Proje, ara: string): string {
     : '';
 
   const gorselDiv = p.kart_gorseli
-    ? `<div class="kart-bg-gorsel" style="background-image:url('${p.kart_gorseli}')"></div>`
+    ? `<div class="kart-bg-gorsel" style="background-image:url('${esc(p.kart_gorseli)}')"></div>`
     : `<div class="kart-bg-gorsel" data-gorsel-yukle="${esc(p.id)}"></div>`;
 
   const paletHTML = RENK_PALETI.map((r) =>
@@ -117,6 +117,8 @@ function kartHTML(p: Proje, ara: string): string {
 const dinlenenler = new WeakMap<HTMLElement, KartEylemleri>();
 /** Son basılan kart HTML'lerinin önbelleği (id → html) — hedefli güncelleme için. */
 const kartOnbellek = new WeakMap<HTMLElement, Map<string, string>>();
+/** Yüklenmiş kart görselleri (id → data-url): yeniden çizimlerde RTDB'ye tekrar gidilmez. */
+const gorselCache = new Map<string, string>();
 
 /** Oturum/veri beklenirken gösterilen parıltılı kart iskeleti (boş durumları gizler). */
 export function yuklemeIskeleti(adet = 8): string {
@@ -183,10 +185,19 @@ export function renderGrid(
     konteyner.querySelectorAll<HTMLElement>('[data-gorsel-yukle]').forEach((el) => {
       const id = el.dataset.gorselYukle as string;
       delete el.dataset.gorselYukle; // aynı düğüm için ikinci kez istek atılmaz
-      eylemler.gorselGetir?.(id).then((data) => {
-        if (!data) return;
+      const uygula = (data: string): void => {
         el.style.backgroundImage = `url('${data}')`;
         el.closest('.card')?.classList.add('has-bg');
+      };
+      const onbellek = gorselCache.get(id);
+      if (onbellek) {
+        uygula(onbellek);
+        return;
+      }
+      eylemler.gorselGetir?.(id).then((data) => {
+        if (!data) return;
+        gorselCache.set(id, data);
+        uygula(data);
       }).catch(() => undefined);
     });
   }
@@ -208,9 +219,7 @@ function tiklama(konteyner: HTMLElement, e: MouseEvent): void {
     case 'yol-kopyala':
       eylemler.yolKopyala(hedef.dataset.yol ?? '');
       break;
-    case 'hizli-durum':
-      eylemler.hizliDurum(id, (hedef.dataset.durum ?? 'Arşiv') as Durum);
-      break;
+
     case 'etiket':
       eylemler.etiketSec?.(hedef.dataset.etiket ?? '');
       break;
