@@ -451,6 +451,7 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
   <div class="stat"><div class="stat-icon">☁</div><div class="stat-info"><div class="stat-val" id="s-bulut">0</div><div class="stat-lbl">Bulut</div></div></div>
   <div class="stat"><div class="stat-icon">🛠</div><div class="stat-info"><div class="stat-val" id="s-ide">0</div><div class="stat-lbl">Farklı IDE</div></div></div>
   <div class="stat"><div class="stat-icon">👤</div><div class="stat-info"><div class="stat-val" id="s-hesap">0</div><div class="stat-lbl">Hesap</div></div></div>
+  <div class="stat"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-val" id="s-kurumsal">0</div><div class="stat-lbl">Kurumsal</div></div></div>
 </div>
 
 <!-- ===== ARAMA VE FİLTRE ===== -->
@@ -472,6 +473,11 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
   </select>
   <select class="filter-sel" id="f-ide" onchange="goster()">
     <option value="">Tüm IDE'ler</option>
+  </select>
+  <select class="filter-sel" id="f-sahiplik" onchange="goster()">
+    <option value="">Tümü (Kurumsal/Bireysel)</option>
+    <option value="Bireysel">👤 Bireysel</option>
+    <option value="Kurumsal">🏢 Kurumsal</option>
   </select>
 </div>
 
@@ -581,6 +587,13 @@ input::-webkit-calendar-picker-indicator{filter:invert(.7)}
         <option value="Bitmedi ama çalışıyor">⚙️ Bitmedi ama çalışıyor</option>
         <option value="Pasif">⏸ Pasif</option>
         <option value="Arşiv">📦 Arşiv</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Sahiplik</label>
+      <select id="f-sahiplik-sec">
+        <option value="Bireysel">👤 Bireysel</option>
+        <option value="Kurumsal">🏢 Kurumsal</option>
       </select>
     </div>
     <div class="form-group">
@@ -757,7 +770,8 @@ const App = {
         bitti: document.getElementById('s-bitti'),
         bulut: document.getElementById('s-bulut'),
         ide: document.getElementById('s-ide'),
-        hesap: document.getElementById('s-hesap')
+        hesap: document.getElementById('s-hesap'),
+        kurumsal: document.getElementById('s-kurumsal')
       }
     };
   }
@@ -831,6 +845,30 @@ async function yukle() {
   finally { setTimeout(() => { _yuklePromise = null; }, YUKLE_THROTTLE_MS); }
 }
 
+/* Benzersiz, alfabetik (tr) sıralı değer listesi — filtre ve datalist'ler için */
+function koleksiyonTopla(dizi, secici) {
+  const gorulen = new Set();
+  const sonuc = [];
+  (Array.isArray(dizi) ? dizi : []).forEach(o => {
+    const v = String((o && secici(o)) || '').trim();
+    if (!v) return;
+    const k = v.toLowerCase();
+    if (gorulen.has(k)) return;
+    gorulen.add(k);
+    sonuc.push(v);
+  });
+  return sonuc.sort((a, b) => a.localeCompare(b, 'tr'));
+}
+/* İki listeyi case-insensitive birleştir, tr sırala */
+function listeleriBirlestir(birincil, ikincil) {
+  const gorulen = new Set(birincil.map(v => v.toLowerCase()));
+  const sonuc = birincil.slice();
+  ikincil.forEach(v => {
+    if (!gorulen.has(v.toLowerCase())) { gorulen.add(v.toLowerCase()); sonuc.push(v); }
+  });
+  return sonuc.sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
 async function _yukleImpl() {
   // Hızlı başlangıç: localStorage cache varsa anında göster (arka planda Firebase tazele)
   try {
@@ -847,6 +885,7 @@ async function _yukleImpl() {
         App.el.ist.bulut.textContent = cache.i.bl || 0;
         App.el.ist.ide.textContent = cache.i.ide || 0;
         App.el.ist.hesap.textContent = cache.i.h || 0;
+        if (App.el.ist.kurumsal) App.el.ist.kurumsal.textContent = cache.i.k || 0;
       }
       goster();
       console.log('[CACHE] localStorage cache yüklendi, anında render', cache.p.length, 'proje');
@@ -874,7 +913,7 @@ async function _yukleImpl() {
   if (!App.oneriVeri || typeof App.oneriVeri !== 'object') App.oneriVeri = { ideler: [], hesaplar: [], emailler: [] };
   if (!Array.isArray(App.tanimliIdeler)) App.tanimliIdeler = [];
   if (!Array.isArray(App.tanimliHesaplar)) App.tanimliHesaplar = [];
-  const ist = sonuclar[4].status === 'fulfilled' ? sonuclar[4].value : { toplam: 0, aktif: 0, bitti: 0, bulut: 0, ide_sayisi: 0, hesap_sayisi: 0 };
+  const ist = sonuclar[4].status === 'fulfilled' ? sonuclar[4].value : { toplam: 0, aktif: 0, bitti: 0, bulut: 0, kurumsal: 0, ide_sayisi: 0, hesap_sayisi: 0 };
   const elements = App.el;
 
   elements.ist.toplam.textContent = ist.toplam;
@@ -883,16 +922,28 @@ async function _yukleImpl() {
   elements.ist.bulut.textContent = ist.bulut;
   elements.ist.ide.textContent = ist.ide_sayisi;
   elements.ist.hesap.textContent = ist.hesap_sayisi;
+  if (elements.ist.kurumsal) elements.ist.kurumsal.textContent = ist.kurumsal || 0;
 
   const fi = document.getElementById('f-ide');
   const secili = fi.value;
+  // Cloud modda /api/otomatik boş döner — listeyi gerçek veriden kur (projeler + tanımlı IDE'ler).
+  // Realtime listener her değişimde yukle() çağırdığı için manuel eklenen IDE anında filtreye düşer.
+  const ideAdlari = listeleriBirlestir(
+    koleksiyonTopla(App.projeler, p => p.ide_adi),
+    koleksiyonTopla(App.tanimliIdeler, t => t.ide_adi));
   fi.innerHTML = '<option value="">Tüm IDE\'ler</option>' +
-    App.oneriVeri.ideler.map(i => `<option value="${Utils.esc(i)}">${Utils.esc(i)}</option>`).join('');
+    ideAdlari.map(i => `<option value="${Utils.esc(i)}">${Utils.esc(i)}</option>`).join('');
   fi.value = secili;
 
-  document.getElementById('dl-ide').innerHTML = App.oneriVeri.ideler.map(i => `<option value="${Utils.esc(i)}">`).join('');
-  document.getElementById('dl-hesap').innerHTML = App.oneriVeri.hesaplar.map(h => `<option value="${Utils.esc(h)}">`).join('');
-  document.getElementById('dl-email').innerHTML = App.oneriVeri.emailler.map(e => `<option value="${Utils.esc(e)}">`).join('');
+  document.getElementById('dl-ide').innerHTML = ideAdlari.map(i => `<option value="${Utils.esc(i)}">`).join('');
+  const hesapAdlari = listeleriBirlestir(
+    koleksiyonTopla(App.projeler, p => p.hesap_adi),
+    koleksiyonTopla(App.tanimliHesaplar, t => t.hesap_adi));
+  const emailAdlari = listeleriBirlestir(
+    koleksiyonTopla(App.projeler, p => p.hesap_email),
+    koleksiyonTopla(App.tanimliHesaplar, t => t.hesap_email));
+  document.getElementById('dl-hesap').innerHTML = hesapAdlari.map(h => `<option value="${Utils.esc(h)}">`).join('');
+  document.getElementById('dl-email').innerHTML = emailAdlari.map(e => `<option value="${Utils.esc(e)}">`).join('');
 
   hizliIdeGoster();
   goster();
@@ -901,7 +952,7 @@ async function _yukleImpl() {
   try {
     localStorage.setItem('ide_cache', JSON.stringify({
       v: 2, p: App.projeler, o: App.oneriVeri, ti: App.tanimliIdeler, th: App.tanimliHesaplar,
-      i: { t: ist.toplam, a: ist.aktif, b: ist.bitti, bl: ist.bulut, ide: ist.ide_sayisi, h: ist.hesap_sayisi },
+      i: { t: ist.toplam, a: ist.aktif, b: ist.bitti, bl: ist.bulut, ide: ist.ide_sayisi, h: ist.hesap_sayisi, k: ist.kurumsal || 0 },
       z: Date.now()
     }));
   } catch (e) { /* localStorage doluysa yoksay */ }
@@ -913,14 +964,16 @@ function goster() {
   const fDurum = document.getElementById('f-durum').value;
   const fTur = document.getElementById('f-tur').value;
   const fIde = document.getElementById('f-ide').value;
+  const fSahiplik = document.getElementById('f-sahiplik').value;
 
   const liste = App.projeler
     .filter(p => {
-      const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email}`.toLowerCase();
+      const metin = `${p.proje_adi} ${p.ide_adi} ${p.hesap_adi} ${p.notlar} ${p.hesap_email} ${p.sahiplik || 'Bireysel'}`.toLowerCase();
       if (ara && !metin.includes(ara)) return false;
       if (fDurum && p.durum !== fDurum) return false;
       if (fTur && p.ide_turu !== fTur) return false;
       if (fIde && (p.ide_adi || '').toLowerCase() !== fIde.toLowerCase()) return false;
+      if (fSahiplik && (p.sahiplik || 'Bireysel') !== fSahiplik) return false;
       return true;
     })
     .sort((a, b) => {
@@ -956,6 +1009,11 @@ function kartUret(p, ara) {
   };
   const durumClass = statusMap[p.durum] || 'tag-pasif';
   const durumGosterim = durumKisalt[p.durum] || p.durum;
+  // Sahiplik rozeti — eski kayıtlarda alan yoksa Bireysel varsay
+  const sah = p.sahiplik || 'Bireysel';
+  const sahRozet = sah === 'Kurumsal'
+    ? `<span class="tag" style="background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.35)" title="Kurumsal">🏢 Kurumsal</span>`
+    : `<span class="tag" style="background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)" title="Bireysel">👤 Bireysel</span>`;
   const color = durumClass.split('-')[1];
   const etiketler = p.etiketler
     ? `<div class="kart-etiketler">${p.etiketler.split(',').map(e => `<span class="tag tag-custom">#${Utils.highlight(e.trim(), ara)}</span>`).join('')}</div>`
@@ -1044,6 +1102,7 @@ function kartUret(p, ara) {
         </div>
         <div class="card-footer">
           <span class="tag ${durumClass}" title="${Utils.esc(p.durum)}">${Utils.esc(durumGosterim)}</span>
+          ${sahRozet}
           <span class="card-date">🕐 ${Utils.esc((p.son_guncelleme || '').split(' ')[0])}</span>
         </div>
       </div>
@@ -1124,13 +1183,14 @@ function taslakKaydet(manuel = false) {
       hesap_adi: document.getElementById('f-hesap').value.trim(),
       hesap_email: document.getElementById('f-email').value.trim(),
       durum: document.getElementById('f-durum-sec').value,
+      sahiplik: document.getElementById('f-sahiplik-sec').value,
       notlar: document.getElementById('f-notlar').value.trim(),
       etiketler: document.getElementById('f-etiketler').value.trim(),
       lokal_yol: document.getElementById('f-lokal-yol').value.trim(),
       deploy_url: document.getElementById('f-deploy-url').value.trim(),
       kart_rengi: renkKayitDegeri(),
     };
-    if (!Object.values(t).some(v => v !== '' && v !== 'Lokal' && v !== 'Bitti')) return;
+    if (!Object.values(t).some(v => v !== '' && v !== 'Lokal' && v !== 'Bitti' && v !== 'Bireysel')) return;
     try {
       localStorage.setItem('proje_taslak', JSON.stringify(t));
     } catch (quotaErr) {
@@ -1147,7 +1207,7 @@ function taslakYukle() {
     const sets = {
       'f-proje': t.proje_adi, 'f-ide-adi': t.ide_adi, 'f-ide-tur': t.ide_turu,
       'f-url': t.ide_url, 'f-hesap': t.hesap_adi, 'f-email': t.hesap_email,
-      'f-durum-sec': t.durum, 'f-notlar': t.notlar, 'f-etiketler': t.etiketler,
+      'f-durum-sec': t.durum, 'f-sahiplik-sec': t.sahiplik || 'Bireysel', 'f-notlar': t.notlar, 'f-etiketler': t.etiketler,
       'f-lokal-yol': t.lokal_yol, 'f-deploy-url': t.deploy_url,
       'f-kart-rengi': t.kart_rengi || otomatikRenkDegeri()
     };
@@ -1161,7 +1221,7 @@ function taslakYukle() {
 }
 
 function modalAc(id = null) {
-  const formIds = ['f-id', 'f-proje', 'f-ide-adi', 'f-ide-tur', 'f-url', 'f-deploy-url', 'f-hesap', 'f-email', 'f-durum-sec', 'f-notlar', 'f-etiketler', 'f-lokal-yol'];
+  const formIds = ['f-id', 'f-proje', 'f-ide-adi', 'f-ide-tur', 'f-url', 'f-deploy-url', 'f-hesap', 'f-email', 'f-durum-sec', 'f-sahiplik-sec', 'f-notlar', 'f-etiketler', 'f-lokal-yol'];
   // Hızlı panelleri kapat
   hizliIdeKapat(); hizliHesapKapat();
   if (id) {
@@ -1176,6 +1236,7 @@ function modalAc(id = null) {
     document.getElementById('f-hesap').value = p.hesap_adi || '';
     document.getElementById('f-email').value = p.hesap_email || '';
     document.getElementById('f-durum-sec').value = p.durum || 'Bitti';
+    document.getElementById('f-sahiplik-sec').value = p.sahiplik || 'Bireysel';
     document.getElementById('f-notlar').value = p.notlar || '';
     document.getElementById('f-etiketler').value = p.etiketler || '';
     document.getElementById('f-lokal-yol').value = p.lokal_yol || '';
@@ -1191,7 +1252,7 @@ function modalAc(id = null) {
     document.getElementById('modal-baslik').textContent = 'Yeni Proje';
     formIds.forEach(fid => {
         const el = document.getElementById(fid);
-        if(el) el.value = fid === 'f-ide-tur' ? 'Lokal' : (fid === 'f-durum-sec' ? 'Bitti' : '');
+        if(el) el.value = fid === 'f-ide-tur' ? 'Lokal' : (fid === 'f-durum-sec' ? 'Bitti' : (fid === 'f-sahiplik-sec' ? 'Bireysel' : ''));
     });
     renkInputDurumAyarla('');
     document.getElementById('f-kart-gorseli').value = '';
@@ -1246,6 +1307,7 @@ async function kaydet() {
     hesap_adi: document.getElementById('f-hesap').value.trim(),
     hesap_email: document.getElementById('f-email').value.trim(),
     durum: document.getElementById('f-durum-sec').value,
+    sahiplik: document.getElementById('f-sahiplik-sec').value || 'Bireysel',
     notlar: document.getElementById('f-notlar').value.trim(),
     etiketler: document.getElementById('f-etiketler').value.trim(),
     lokal_yol: document.getElementById('f-lokal-yol').value.trim(),
@@ -2024,6 +2086,7 @@ window.addEventListener('unload', () => {
       aktif: App.projeler.filter(aktifMi).length,
       bitti: App.projeler.filter(function (p) { return p.durum === 'Bitti'; }).length,
       bulut: App.projeler.filter(function (p) { return p.ide_turu === 'Bulut'; }).length,
+      kurumsal: App.projeler.filter(function (p) { return (p.sahiplik || 'Bireysel') === 'Kurumsal'; }).length,
       ide_sayisi: App.tanimliIdeler.length,
       hesap_sayisi: App.tanimliHesaplar.length
     };
