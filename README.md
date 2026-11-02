@@ -22,18 +22,11 @@ Bulut (Cursor, Replit, Cloud9 vb.) ve lokal geliştirme ortamlarındaki projeler
 
 ## 🛠️ Kurulum ve Çalıştırma
 
-### 1. Python ile Çalıştırma (Masaüstü)
-Bilgisayarınızda Python 3.x yüklü ise:
+### 1. Python ile Çalıştırma (Masaüstü) — ARŞİVLENDİ
+`ide_yonetici.pyw` masaüstü uygulaması `docs/archive/` altına taşındı. Canlı sürüm yalnızca Firebase Hosting (`public/index.html`) üzerinden çalışır.
 
-```bash
-python ide_yonetici.pyw
-```
-*Sistem otomatik olarak varsayılan tarayıcınızda `http://localhost:8700` adresini açacaktır (port meşgulse otomatik artırılır).*
-
-`ide_yonetici.pyw` self-contained bir dosyadır: tüm HTML/CSS/JS frontend kodu `public/index.html` ile senkronize olarak içinde gömülüdür. Hiçbir `pip install` gerekmez; yalnızca standart kütüphane kullanılır.
-
-### 2. Standalone Executable
-`build/` klasörü içindeki **IDE_Yonetici.exe** dosyasını çalıştırın. Python gerektirmez.
+### 2. Standalone Executable — ARŞİVLENDİ
+Masaüstü `.exe` üretimi kaldırıldı (`build/` yalnızca geçmiş çıktıları içerir).
 
 ### 3. Firebase Hosting (Sadece Web Arayüzü)
 Frontend public build'i Firebase Hosting üzerinden yayınlanır:
@@ -41,28 +34,18 @@ Frontend public build'i Firebase Hosting üzerinden yayınlanır:
 ```bash
 firebase deploy --only hosting
 ```
-- `https://ideyonetici-em-2026.web.app` adresinden erişilir.
+- `https://ideyonetici.web.app` adresinden erişilir.
 - Veriler kullanıcının Google hesabı ile Firebase Realtime Database'de izole edilir (`users/$uid` kuralları).
 - Kimlik doğrulama `public/index.html` içindeki Firebase Auth shim'i üzerinden yapılır.
 
-### 4. Cloud Run (Backend)
-Python backend `cloudrun/` altında containerize edilip Cloud Run'a deploy edilebilir:
-
-```bash
-cd cloudrun
-gcloud run deploy ide-yonetici --source .
-```
-Endpoint: `/api/projeler`, `/api/diagnostic`, vb.
+### 4. Cloud Run (Backend) — KALDIRILDI
+`cloudrun/` klasörü kaldırıldı. Backend ihtiyacı yoktur; veriler Firebase Realtime Database'de tutulur.
 
 ---
 
 ## 🧪 Geliştiriciler İçin
 
-*   **Build Alma:** Kendi .exe dosyanızı oluşturmak için:
-    ```bash
-    pyinstaller --onefile --name "IDE_Yonetici" --clean ide_yonetici.pyw
-    ```
-    Çıktı: `build/IDE_Yonetici.exe`
+*   **Build Alma:** Masaüstü build kaldırıldı. Arayüz değişikliği için `public/index.html` düzenlenip `firebase deploy --only hosting` yapılır.
 
 *   **Tanılama:** Backend'in ayakta olduğunu `/api/diagnostic` uç noktasından doğrulayın.
 
@@ -76,15 +59,12 @@ Endpoint: `/api/projeler`, `/api/diagnostic`, vb.
 
 ```
 .
-├── ide_yonetici.pyw        # Self-contained masaüstü uygulaması (Python + PyWebView)
-├── public/index.html       # Frontend (Firebase Hosting için)
-├── cloudrun/               # Cloud Run deployment (Docker + main.py)
+├── public/index.html       # Frontend (Firebase Hosting için — tek canlı kaynak)
 ├── firebase.json           # Firebase Hosting + RTDB config
 ├── database.rules.json     # Firebase RTDB güvenlik kuralları
 ├── agent.md                # Teknik hafıza / AI ajan yönergeleri
 ├── README.md               # Bu dosya
-├── docs/archive/           # Eski PRD'ler, planlar
-├── build/, dist/           # PyInstaller çıktıları (git-ignored)
+├── docs/archive/           # Eski PRD'ler, planlar + arşivlenen masaüstü uygulaması (ide_yonetici.pyw)
 └── yedekler/               # Otomatik JSON yedekler (git-ignored, dış arşive taşınır)
 ```
 

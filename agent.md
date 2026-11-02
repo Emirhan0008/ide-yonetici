@@ -6,11 +6,9 @@ Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için krit
 Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V2.5 (Stabil)** aşamasındadır.
 
 ## 🛠️ Teknik Mimari ve Temel Prensip
-- **EN BÜYÜK ÖNCELİK:** Uygulama tek bir `.pyw` dosyası çalıştırılarak (Self-contained) ayağa kalkmalıdır. Tüm HTML, CSS ve JS kodları bu dosya içinde gömülü (inline) kalmaya devam etmelidir.
-- **Kütüphane Kullanımı:** Yalnızca Python standart kütüphanesi kullanılır (`http.server`, `sqlite3`, `zlib`, `base64`, `webbrowser`, vb.). UI kütüphaneleri CDN üzerinden yüklenebilir (örn. Firebase SDK).
-- **Frontend Gelişimi:** UI kütüphaneleri kullanılabilir, fakat nihai çıktı (bundle) Python dosyası içine gömülerek "tek dosya ile çalıştırma" özelliği korunmalıdır.
-- **Public Build:** `public/index.html` ayrıca Firebase Hosting üzerinden yayınlanır (kullanıcı girişi ile).
-- **Cloud Run:** `cloudrun/` altında Python backend'in konteynerleştirilmiş versiyonu bulunur (opsiyonel, aynı kodu çalıştırır).
+- **CANLI KAYNAK:** `public/index.html` Firebase Hosting üzerinden yayınlanır (`https://ideyonetici.web.app`). Tek geliştirme hedefi budur.
+- **ARŞİV:** Masaüstü `ide_yonetici.pyw` uygulaması `docs/archive/` altına taşındı; `cloudrun/` kaldırıldı. Lokal SQLite/HTTP backend artık kullanılmıyor.
+- **Kütüphane Kullanımı:** Frontend UI kütüphaneleri CDN üzerinden yüklenebilir (örn. Firebase SDK).
 
 ## 🛡️ Kritik Fonksiyonel Kurallar (Hata Önleyici)
 
@@ -56,11 +54,8 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - `firebase_ayarlar.json` **artık kullanılmıyor** (legacy dosya, shim hardcode edilmiş). İleride runtime config gerekirse shim'e taşınmalı.
 
 ## 📂 Önemli Dosyalar ve Konumlar
-- `ide_yonetici.pyw`: Self-contained masaüstü uygulaması (Backend + Frontend HTML inline).
-- `public/index.html`: Firebase Hosting için ayrılmış frontend (shim + UI).
-- `cloudrun/main.py`: Cloud Run entrypoint (aynı `ide_yonetici` modülünü çalıştırır).
-- `ide_yonetici.db`: SQLite veritabanı (script ile aynı dizinde, .gitignore'da).
-- `build/IDE_Yonetici.exe`: PyInstaller ile üretilen taşınabilir sürüm.
+- `public/index.html`: Firebase Hosting frontend'i (tek canlı kaynak: shim + UI).
+- `docs/archive/ide_yonetici.pyw`: Arşivlenen masaüstü uygulaması (artık çalıştırılmaz, referans için saklanır).
 - `docs/archive/`: Eski PRD'ler ve uygulanmamış planlar.
 
 ## 🗄️ Veritabanı Şeması (projeler tablosu)
@@ -71,14 +66,9 @@ lokal_yol, deploy_url, kart_rengi, kart_gorseli
 ```
 
 ## 🚀 İş Akışı ve Doğrulama
-1. **Geliştirme:** `ARAYUZ_HTML` değişkeni içindeki JS/CSS kodlarını güncelleyin. Aynı zamanda `public/index.html`'i senkronize edin.
-2. **Yenileme:** Değişikliklerin yansıması için Python sürecini durdurup (`Ctrl+C`) tekrar başlatın. Tarayıcıda `Ctrl+F5` yapın.
-3. **Tanılama:** `/api/diagnostic` uç noktasının "Healthy" döndüğünü doğrulayın.
-4. **Deploy:** Frontend değişikliklerini `firebase deploy --only hosting` ile yayınlayın.
+1. **Geliştirme:** `public/index.html` içindeki JS/CSS kodlarını güncelleyin.
+2. **Yenileme:** Tarayıcıda `Ctrl+F5` yapın.
+3. **Deploy:** Frontend değişikliklerini `firebase deploy --only hosting` ile yayınlayın.
 
 ## ⚠️ Bilinen "Gotcha"lar
-- **Port Çakışması:** Sunucu `8888` meşgulse otomatik olarak portu artırır.
-- **Büyük Görseller:** `kart_gorseli` Base64 olarak DB'de saklanır. 500KB görsel ~670KB yer kaplar. Çok sayıda büyük görselli proje DB boyutunu artırır.
-- **Tarayıcı Kapanınca:** `beforeunload` event'i `navigator.sendBeacon('/api/kapat')` çağırır, Python süreci kapanır.
-- **Cloud Run Refactor:** `cloudrun/ide_yonetici.py` şu an kök `ide_yonetici.pyw` ile birebir aynı. PyWebView import'u Cloud Run container init'te patlar — gelecekte koşullu import (`if not CLOUD_RUN:`) ile ayrılmalı.
-- **API Key Güvenliği:** `public/index.html` içindeki Firebase config'i (apiKey, vb.) client-side'dır, normal. Firebase Console'da **Authorized domains** listesini sıkılaştır (sadece `localhost` ve gerçek domain) — domain kısıtlaması olmadan API key kötüye kullanılabilir.
+- **Tarayıcı Cache:** Hosting header'ları `no-store` zorlar; yine de testte `Ctrl+F5` yapın.
