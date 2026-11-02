@@ -30,6 +30,34 @@ export async function projeGeriYukle(uid: string, id: string, veri: Omit<Proje, 
   await set(ref(db, kullaniciYolu(uid, `projeler/${id}`)), veri);
 }
 
+/** Toplu silme: biri başarısız olsa da diğerlerine devam eder; başarılı sayısını döndürür. */
+export async function projeTopluSil(uid: string, idler: string[]): Promise<number> {
+  let basarili = 0;
+  for (const id of idler) {
+    try {
+      await projeSil(uid, id);
+      basarili += 1;
+    } catch {
+      // tekil hata işlemi durdurmasın
+    }
+  }
+  return basarili;
+}
+
+/** Toplu durum değişikliği: yalnız durum + güncelleme_tarihi alanlarına yazar; başarılı sayısını döndürür. */
+export async function projeTopluDurum(uid: string, idler: string[], durum: Durum): Promise<number> {
+  let basarili = 0;
+  for (const id of idler) {
+    try {
+      await update(ref(db, kullaniciYolu(uid, `projeler/${id}`)), { durum, guncelleme_tarihi: new Date().toISOString() });
+      basarili += 1;
+    } catch {
+      // tekil hata işlemi durdurmasın
+    }
+  }
+  return basarili;
+}
+
 /** Kart üstündeki hızlı durum değiştirme — tek alan yazar. */
 export async function hizliDurum(uid: string, id: string, durum: Durum): Promise<void> {
   await update(ref(db, kullaniciYolu(uid, `projeler/${id}`)), {

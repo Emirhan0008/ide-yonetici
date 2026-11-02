@@ -15,6 +15,8 @@ export interface KartEylemleri {
   gorselGetir?(id: string): Promise<string | null>;
   /** Etiket çipine tıklama — o etiketi aratır (main.ts uygular). */
   etiketSec?(etiket: string): void;
+  /** Kart seçimi değişti (toplu işlem; main.ts seçim durumunu tutar). */
+  kartSec?(id: string, secili: boolean): void;
 }
 
 const DURUM_CLASS: Record<string, string> = {
@@ -84,6 +86,7 @@ function kartHTML(p: Proje, ara: string): string {
         </div>
       </div>
       <div class="card-actions-bar">
+        <label class="kart-sec-kutusu" title="Toplu işlem için seç"><input type="checkbox" data-eylem="kart-sec"></label>
         ${acBtn}
         ${deployBtn}
         <select class="kart-durum-sel" data-eylem="durum-sec" title="Durumu değiştir" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 4px;cursor:pointer;width:auto">${DURUM_SECENEKLERI.map((d) => `<option value="${esc(d)}"${d === p.durum ? ' selected' : ''}>${esc(DURUM_KISALT[d] || d)}</option>`).join('')}</select>
@@ -248,6 +251,12 @@ function tiklama(konteyner: HTMLElement, e: MouseEvent): void {
 function degisim(konteyner: HTMLElement, e: Event): void {
   const eylemler = dinlenenler.get(konteyner);
   if (!eylemler) return;
+  const secim = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="kart-sec"]');
+  if (secim) {
+    const kartEl = secim.closest<HTMLElement>('[data-kart]');
+    eylemler.kartSec?.(kartEl?.dataset.kart ?? '', (e.target as HTMLInputElement).checked);
+    return;
+  }
   const hedef = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="durum-sec"]');
   if (hedef) {
     const id = hedef.closest<HTMLElement>('[data-kart]')?.dataset.kart ?? '';

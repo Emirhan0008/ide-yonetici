@@ -3,14 +3,14 @@
 Bu dosya, projeyi devralacak olan yazılımcı veya yapay zeka ajanı için kritik teknik hafızayı ve operasyonel kuralları içerir. **Lütfen geliştirmeye başlamadan önce okuyun.**
 
 ## 🎯 Proje Vizyonu ve Durumu
-Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V3 (Vite + TypeScript)** aşamasındadır; canlı: `https://ideyonetici.web.app`.
+Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi proje hangi hesapta/IDE'de kaldı?" karmaşasını çözen minimalist bir yönetim panelidir. Şu an **V3.1 (Vite + TypeScript)** aşamasındadır; canlı: `https://ideyonetici.web.app`.
 
 ## 🛠️ Teknik Mimari (GÜNCEL)
 - **CANLI KAYNAK:** `app/` — Vite + vanilla TypeScript, modüler (framework yok).
   - `src/data/` → **TEK veri kapısı**: RTDB okuma/yazma yalnızca burada (`projeler.ts`, `tanimlilar.ts`, `gorseller.ts`, `rtdb.ts`). UI asla doğrudan Firebase çağırmaz.
-  - `src/ui/` → özellik modülleri: `kartlar` (data-* delegasyonu — inline onclick YOK), `modal`, `ayarlar`, `tema`, `renkler`, `dom`.
+  - `src/ui/` → özellik modülleri: `kartlar` (data-* delegasyonu — inline onclick YOK), `modal`, `ayarlar`, `tema`, `renkler`, `dom`, `kanban` (kanban görünümü — HTML5 sürükle-bırak).
   - `src/model.ts` → alan tipleri + durum kuralları (`devamEdiyorMu` tek kaynak). `src/store.ts` → tipli state (setState/aboneOl).
-  - `src/styles/` → tema/kartlar/modal/ayarlar/cila CSS modülleri.
+  - `src/styles/` → tema/kartlar/modal/ayarlar/cila/kanban (`kanban.css`) CSS modülleri.
 - **Firebase SDK:** modular v13 (npm, `firebase/app|auth|database`) — eski compat/CDN dönemi bitti.
 - **BACKEND YOK.** Eski shim (`/api/...` taklidi) ÖLDÜ; `/api` diye bir şey yok. Auth: `signInWithPopup(GoogleAuthProvider)`, popup engellenirse redirect fallback.
 - **Build/Deploy:** `cd app && npm run build` → `app/dist` (firebase.json oradan yayınlar) → `firebase deploy --only hosting`.
@@ -35,16 +35,24 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - **Lokal yol temizleme:** `f-lokal-yol` paste/input tırnak temizliği (Windows "Yol olarak kopyala").
 - **TypeScript 7 notu:** `tsconfig` `erasableSyntaxOnly` açık — `<Tip>x` cast'leri YASAK, `x as Tip` kullanın.
 - **Test kancası:** yalnızca DEV modda `window.__test = { setState, ... }`; e2e testleri sahte oturumu bununla kurar (gerçek Google login headless test edilemez).
+- **Hedefli DOM güncelleme (v3.1):** `renderGrid`, `kartlar.kartHTML` çıktısını id-önbelleğiyle karşılaştırır; değişmemiş kart düğümü yerinde kalır. Kart içi DURUM/İÇERİK değişikliği mutlaka `kartHTML`'den geçmeli; SEÇİM gibi geçici görsel durum `kartHTML`'e GİRMEZ (main.ts DOM'a doğrudan uygular).
+- **Çoklu seçim (v3.1):** kart onay kutuları `data-eylem="kart-sec"` delegasyonuyla main.ts'deki `seciliKartlar` kümesine akar; toplu işlemler `veri/projeler.ts` içindeki `projeTopluSil`/`projeTopluDurum` üzerinden gider (UI doğrudan RTDB'ye yazmaz).
+- **Kanban (v3.1):** `kanban.ts` kendi delegasyonunu `dataset.delegeEdildi` ile kurar (kartlar.ts delegasyonuyla çakışmaz); durum değişimi `hizliDurum` veri fonksiyonunu kullanır.
+- **PWA:** vite-plugin-pwa `autoUpdate` modunda; manifest ve service worker build'de üretilir — `index.html`'e elle manifest linki EKLENMEZ; ikonlar `app/public/pwa-*.png` (kaynak: `favicon.svg`).
+- **Sürüm ritüeli:** her yayından önce `app/src/verziyon.ts` içindeki `SURUM` alanı güncellenir; Ayarlar → Veri'deki sürüm rozeti oradan gelir (tek kaynak).
+- **Yedek hatırlatıcısı:** yedek indirildiğinde tarayıcıya `localStorage: son_yedek` yazılır; 7 gün geçerse Ayarlar → Veri yeni yedek için uyarır.
 
 ## 📂 Önemli Dosyalar
 - `app/` — canlı uygulama (`e2e/smoke.spec.ts` dahil; `npm test` ile koşar, dev sunucusunu kendi ayağa kaldırır).
+- `app/src/verziyon.ts` — sürüm rozetinin tek kaynağı (`SURUM` alanı; bkz. Sürüm ritüeli).
+- `.github/workflows/ci.yml` — her push/PR'da build + test çalıştırır.
 - `docs/archive/index-v2.5-tek-dosya.html` — geçiş öncesi tek dosya sürüm (referans/geri dönüş).
 - `docs/archive/ide_yonetici.pyw` — arşiv masaüstü uygulaması. `docs/archive/PRD-v3.0-uygulanmamis.md` — uygulanmamış eski plan.
 - `firebase.json` — hosting `app/dist` + cache header'ları + cleanUrls; `database.rules.json` — kullanıcı yalıtımı.
 
 ## 🚀 İş Akışı ve Doğrulama
 1. `cd app && npm run dev` → http://localhost:5199 (HMR).
-2. Değişiklik yap; `npm test` (8 duman senaryosu) + `npm run build` (tsc tip kontrolü build'in parçası).
+2. Değişiklik yap; `npm test` (8 duman senaryosu) + `npm run build` (tsc tip kontrolü build'in parçası). Duman testleri v3.1 akışlarını da kapsar: kart üstü durum seçici, çoklu seçim, kanban sürükle-bırak, sıralama.
 3. Repo kökünden `firebase deploy --only hosting`.
 4. Canlıyı doğrula: `Invoke-WebRequest https://ideyonetici.web.app` → 200 + asset'ler `immutable`.
 
@@ -55,6 +63,6 @@ Bu araç, çoklu bulut IDE (Cursor, Replit vb.) kullanımından doğan "hangi pr
 - **Geri dönüş:** bir sorun olursa `firebase.json` public'i `docs/archive/index-v2.5-tek-dosya.html` içeren bir klasöre çevirip deploy etmek yeterli (RTDB şeması birebir uyumlu).
 
 ## 🗺️ Kalan İşler (öneri sırası)
-1. Gerçek veriyle uzun kullanım → gerekirse hedefli DOM güncelleme (şu an tam yeniden-çizim; <100 projede sorun değil).
-2. Kart üzerinde tam durum seçici (bugün yalnız Arşiv↔Bitti hızlı geçişi var; durum değişikliğinin çoğu modal üzerinden).
-3. Kanban sürükle-bırak (eski sitede yarım kalmıştı) — istenirse `kartlar.ts` içine eklenir.
+1. Gerçek veriyle uzun kullanım → gerekirse hedefli DOM güncelleme (şu an tam yeniden-çizim; <100 projede sorun değil). **(v3.1'de yapıldı — bkz. Kritik Kurallar.)**
+2. Kart üzerinde tam durum seçici (bugün yalnız Arşiv↔Bitti hızlı geçişi var; durum değişikliğinin çoğu modal üzerinden). **(v3.1'de yapıldı.)**
+3. Kanban sürükle-bırak (eski sitede yarım kalmıştı) — istenirse `kartlar.ts` içine eklenir. **(v3.1'de yapıldı — ayrı `ui/kanban.ts` olarak.)**

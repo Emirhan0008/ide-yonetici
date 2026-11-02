@@ -4,10 +4,11 @@ import './styles/kartlar.css';
 import './styles/modal.css';
 import './styles/ayarlar.css';
 import './styles/cila.css';
+import './styles/kanban.css';
 
 import { cikisYap, authAboneOl, girisYap } from './auth';
 import { gorselOku } from './data/gorseller';
-import { hizliDurum as veriHizliDurum, kartRengiKaydet, projeleriDinle } from './data/projeler';
+import { hizliDurum as veriHizliDurum, kartRengiKaydet, projeTopluDurum, projeTopluSil, projeleriDinle } from './data/projeler';
 import { hesaplariDinle, ideleriDinle } from './data/tanimlilar';
 import type { Durum, Proje } from './model';
 import { devamEdiyorMu } from './model';
@@ -16,6 +17,7 @@ import { aboneOl, istatistikHesapla, setState } from './store';
 import { $, benzersizListe, bildirim } from './ui/dom';
 import { ayarlarAc, ayarlarKur, arkaPlanInit } from './ui/ayarlar';
 import { renderGrid, yuklemeIskeleti } from './ui/kartlar';
+import { renderKanban } from './ui/kanban';
 import { modalAc, modalKur, silOnayAc } from './ui/modal';
 import { temaDegistir, temaInit } from './ui/tema';
 
@@ -28,6 +30,8 @@ temaInit();
 arkaPlanInit();
 modalKur({ uid });
 ayarlarKur({ uid });
+topluBarKur();
+gorunumKur();
 
 /* ===== Avatar / auth UI ===== */
 function avatarGuncelle(durum: AppState): void {
@@ -155,6 +159,12 @@ const kartEylemleri = {
     araKutusu.focus();
     if (sonDurum) render(sonDurum);
   },
+  kartSec(id: string, secili: boolean): void {
+    if (secili) seciliKartlar.add(id); else seciliKartlar.delete(id);
+    const kartEl = document.querySelector<HTMLElement>(`#kartlar [data-kart="${CSS.escape(id)}"]`);
+    kartEl?.classList.toggle('secili', secili);
+    secimGoster();
+  },
 };
 
 /* ===== Filtre + render ===== */
@@ -239,6 +249,8 @@ function render(durum: AppState): void {
   if (!durum.oturumHazir || (durum.kullanici && !durum.veriHazir)) {
     $('sayim').textContent = '';
     kartlar.innerHTML = yuklemeIskeleti();
+    $('kanban').classList.remove('aktif');
+    kartlar.style.display = '';
     return;
   }
   if (!durum.kullanici) {
@@ -248,16 +260,116 @@ function render(durum: AppState): void {
       <div class="empty-text">Projelerin Google hesabınla buluta senkronize edilir.<br>Devam etmek için giriş yap.</div>
       <button class="btn btn-primary" id="bos-giris-btn" style="margin-top:8px">Google ile Giriş Yap</button>
     </div>`;
+    $('kanban').classList.remove('aktif');
+    kartlar.style.display = '';
     $('bos-giris-btn').addEventListener('click', () => {
       void girisYap().catch((e) => bildirim('Giriş başarısız: ' + (e as Error).message, 'err'));
     });
     return;
   }
-  renderGrid(kartlar, filtreliListe(durum), ($<HTMLInputElement>('ara')).value.toLowerCase(), kartEylemleri);
-  const gosterilen = kartlar.querySelectorAll('.card').length;
+  const liste = filtreliListe(durum);
+  const kanbanKap = $('kanban');
+  let gosterilen: number;
+  if (gorunum === 'kanban') {
+    kartlar.style.display = 'none';
+    kanbanKap.classList.add('aktif');
+    renderKanban(kanbanKap, liste, kanbanEylemleri);
+    gosterilen = kanbanKap.querySelectorAll('.kb-kart').length;
+  } else {
+    kanbanKap.classList.remove('aktif');
+    kartlar.style.display = '';
+    renderGrid(kartlar, liste, ($<HTMLInputElement>('ara')).value.toLowerCase(), kartEylemleri);
+    secimUygula();
+    gosterilen = kartlar.querySelectorAll('.card').length;
+  }
   $('sayim').textContent = durum.projeler.length === gosterilen
     ? `${gosterilen} proje`
     : `${gosterilen} / ${durum.projeler.length} proje gösteriliyor`;
+}
+
+/* ===== Çoklu seçim + alt işlem çubuğu ===== */
+const seciliKartlar = new Set<string>();
+
+function topluBarKur(): void {
+  const bar = document.createElement('div');
+  bar.id = 'toplu-bar';
+  bar.className = 'toplu-cubuk';
+  bar.innerHTML = '<span class="toplu-sayim"></span>'
+    + '<button type="button" data-toplu="bitti">✅ Bitti</button>'
+    + '<button type="button" data-toplu="arsiv">📦 Arşivle</button>'
+    + '<button type="button" data-toplu="sil" class="toplu-sil">🗑️ Sil</button>'
+    + '<button type="button" data-toplu="temizle">✕ Temizle</button>';
+  document.body.appendChild(bar);
+  bar.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-toplu]');
+    if (!btn) return;
+    void topluIslem(btn.dataset.toplu ?? '');
+  });
+}
+
+function secimGoster(): void {
+  const bar = document.getElementById('toplu-bar');
+  if (!bar) return;
+  bar.classList.toggle('goster', seciliKartlar.size > 0);
+  const adet = bar.querySelector('.toplu-sayim');
+  if (adet) adet.textContent = `${seciliKartlar.size} seçili`;
+}
+
+/** Yeniden çizimden sonra seçim işaretlerini DOM'a geri uygular (seçim HTML önbelleğine girmez). */
+function secimUygula(): void {
+  document.querySelectorAll<HTMLElement>('#kartlar [data-kart]').forEach((kartEl) => {
+    const id = kartEl.dataset.kart ?? '';
+    const secili = seciliKartlar.has(id);
+    kartEl.classList.toggle('secili', secili);
+    const kutu = kartEl.querySelector<HTMLInputElement>('input[data-eylem="kart-sec"]');
+    if (kutu) kutu.checked = secili;
+  });
+}
+
+async function topluIslem(tur: string): Promise<void> {
+  const u = uid();
+  if (!u || seciliKartlar.size === 0) return;
+  const idler = [...seciliKartlar];
+  if (tur === 'temizle') {
+    seciliKartlar.clear();
+    secimGoster();
+    secimUygula();
+    return;
+  }
+  if (tur === 'sil') {
+    if (!window.confirm(`${idler.length} proje silinecek. Emin misin?`)) return;
+    const n = await projeTopluSil(u, idler);
+    bildirim(`${n} proje silindi`);
+  } else if (tur === 'arsiv' || tur === 'bitti') {
+    const durum: Durum = tur === 'arsiv' ? 'Arşiv' : 'Bitti';
+    const n = await projeTopluDurum(u, idler, durum);
+    bildirim(`${n} proje → ${durum}`);
+  }
+  seciliKartlar.clear();
+  secimGoster();
+}
+
+/* ===== Görünüm: Izgara / Kanban ===== */
+let gorunum: 'izgara' | 'kanban' = 'izgara';
+
+const kanbanEylemleri = {
+  durumDegis(id: string, durum: Durum): void {
+    const u = uid();
+    if (!u) return;
+    void veriHizliDurum(u, id, durum).then(() => bildirim(`Durum: ${durum}`));
+  },
+};
+
+function gorunumSec(g: 'izgara' | 'kanban'): void {
+  gorunum = g;
+  $('gorunum-izgara').classList.toggle('aktif', g === 'izgara');
+  $('gorunum-kanban').classList.toggle('aktif', g === 'kanban');
+  if (sonDurum) render(sonDurum);
+}
+
+function gorunumKur(): void {
+  $('gorunum-izgara').addEventListener('click', () => gorunumSec('izgara'));
+  $('gorunum-kanban').addEventListener('click', () => gorunumSec('kanban'));
 }
 
 /* ===== Abonelikler ===== */

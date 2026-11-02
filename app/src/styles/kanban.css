@@ -1,0 +1,17 @@
+/* ===== Kanban görünümü + izgara/kanban düğmeleri ===== */
+.kanban{display:none;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:start}
+.kanban.aktif{display:grid}
+.kb-kolon{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:8px;min-height:120px}
+.kb-kolon.hedef{border-color:var(--border2);box-shadow:0 0 0 2px var(--glow)}
+.kb-kolon-baslik{font-size:12px;font-weight:700;color:var(--text);border-bottom:2px solid;padding:4px 2px 8px;margin-bottom:8px;display:flex;justify-content:space-between}
+.kb-adet{color:var(--text2)}
+.kb-kolon-icek{display:flex;flex-direction:column;gap:8px;min-height:60px}
+.kb-kart{background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--kart-renk,#4a546a);border-radius:8px;padding:8px 10px;cursor:grab;user-select:none}
+.kb-kart:hover{background:var(--bg-hover)}
+.kb-kart.surukleniyor{opacity:.4}
+.kb-baslik{font-size:13px;font-weight:600;color:var(--text);word-break:break-word}
+.kb-alt{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);margin-top:4px}
+.gorunum-dugmeleri{display:flex;gap:4px}
+.gorunum-btn{background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:14px;cursor:pointer;opacity:.55}
+.gorunum-btn.aktif{opacity:1;border-color:var(--border2)}
+@media (max-width:720px){.kanban{grid-template-columns:1fr}}
