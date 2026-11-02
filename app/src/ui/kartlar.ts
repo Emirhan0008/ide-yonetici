@@ -1,0 +1,219 @@
+// Kart ızgarası: HTML üretimi + olay delegasyonu.
+// Eski sürümdeki inline onclick YOK — kullanıcı verisi JS string'e asla gömülmez,
+// hepsi data-* üzerinden delegasyonla çalışır (tırnak/XSS sınıfı hata imkânsız).
+import type { Durum, Proje } from '../model';
+import { RENK_PALETI } from './renkler';
+import { esc, getIdeIcon, highlight } from './dom';
+
+export interface KartEylemleri {
+  duzenle(id: string): void;
+  silOnayla(id: string, ad: string): void;
+  hizliDurum(id: string, durum: Durum): void;
+  renkKaydet(id: string, renk: string): void;
+  yolKopyala(yol: string): void;
+  /** Faz 2: yeni görsel yolu. Eski kayıtlarda inline kart_gorseli olduğundan opsiyonel. */
+  gorselGetir?(id: string): Promise<string | null>;
+}
+
+const DURUM_CLASS: Record<string, string> = {
+  'Bitti': 'tag-bitti', 'Yarım Kaldı': 'tag-yarim', 'Bitmedi ama çalışıyor': 'tag-calisiyor',
+  'Pasif': 'tag-pasif', 'Arşiv': 'tag-arsiv',
+};
+const DURUM_KISALT: Record<string, string> = {
+  'Bitti': '✓ Bitti', 'Yarım Kaldı': '⏸ Yarım', 'Bitmedi ama çalışıyor': '⚙ Çalışıyor',
+  'Pasif': '⏸ Pasif', 'Arşiv': '📦 Arşiv',
+};
+const DURUM_RENK: Record<string, string> = {
+  'Bitti': '#10b981', 'Yarım Kaldı': '#f97316', 'Bitmedi ama çalışıyor': '#3b82f6',
+  'Pasif': '#4a546a', 'Arşiv': '#f59e0b',
+};
+
+function kartHTML(p: Proje, ara: string): string {
+  const durumClass = DURUM_CLASS[p.durum || ''] || 'tag-pasif';
+  const durumGosterim = DURUM_KISALT[p.durum || ''] || p.durum;
+  const renk = p.kart_rengi || DURUM_RENK[p.durum || ''] || '#4a546a';
+
+  const sah = p.sahiplik || 'Bireysel';
+  const sahRozet = sah === 'Kurumsal'
+    ? `<span class="tag" style="background:rgba(168,85,247,.15);color:#c084fc;border:1px solid rgba(168,85,247,.35)" title="Kurumsal">🏢 Kurumsal</span>`
+    : `<span class="tag" style="background:rgba(255,255,255,.04);color:var(--text2);border:1px solid var(--border)" title="Bireysel">👤 Bireysel</span>`;
+
+  const etiketler = p.etiketler
+    ? `<div class="kart-etiketler">${p.etiketler.split(',').map((e) => `<span class="tag tag-custom">#${highlight(e.trim(), ara)}</span>`).join('')}</div>`
+    : '';
+
+  const acBtn = p.ide_turu === 'Bulut'
+    ? (p.ide_url ? `<button class="btn btn-primary btn-sm" data-eylem="link" data-url="${esc(p.ide_url)}" title="IDE'yi aç">🚀</button>` : '')
+    : (p.lokal_yol ? `<button class="btn btn-primary btn-sm" data-eylem="yol-kopyala" data-yol="${esc(p.lokal_yol)}" title="Yolu kopyala">💻</button>` : '');
+  const deployBtn = p.deploy_url
+    ? `<button class="btn btn-success btn-sm" data-eylem="link" data-url="${esc(p.deploy_url)}" title="Deploy edilen siteyi aç">🌐</button>`
+    : '';
+
+  const arsivdeMi = p.durum === 'Arşiv';
+  const sonrakiDurum: Durum = arsivdeMi ? 'Bitti' : 'Arşiv';
+
+  const gorselDiv = p.kart_gorseli
+    ? `<div class="kart-bg-gorsel" style="background-image:url('${p.kart_gorseli}')"></div>`
+    : `<div class="kart-bg-gorsel" data-gorsel-yukle="${esc(p.id)}"></div>`;
+
+  const paletHTML = RENK_PALETI.map((r) =>
+    `<button class="kart-renk-popup-btn ${r === (p.kart_rengi || '') ? 'aktif' : ''}" style="background:${r}" title="${r}" data-eylem="renk-sec" data-renk="${r}" type="button"></button>`
+  ).join('');
+
+  const NOT_LIMIT = 120;
+  let notHTML = '';
+  if (p.notlar) {
+    const uzun = p.notlar.length > NOT_LIMIT;
+    notHTML = `
+      <div class="card-note">${highlight(p.notlar, ara)}</div>
+      ${uzun ? `<button class="devamini-oku" data-eylem="not-toggle" type="button">▾ devamını oku</button>` : ''}`;
+  }
+
+  const tarih = (p.guncelleme_tarihi || p.olusturma_tarihi || '').slice(0, 10);
+
+  return `
+    <div class="card${p.kart_gorseli ? ' has-bg' : ''}" data-kart="${esc(p.id)}" style="--kart-renk:${esc(renk)};border:2px solid ${esc(renk)}">
+      ${gorselDiv}
+      <div class="kart-overlay-ust"></div>
+      <div class="kart-overlay-alt"></div>
+      <div class="kart-renk-popup">
+        <div class="kart-renk-popup-palet">${paletHTML}</div>
+        <div class="kart-renk-popup-alt">
+          <input type="color" value="${esc(p.kart_rengi || '#0ea5e9')}" title="Özel renk" data-eylem="renk-ozel">
+          <button class="kart-renk-popup-sifirla" data-eylem="renk-sifirla" type="button">↺ Otomatik</button>
+        </div>
+      </div>
+      <div class="card-actions-bar">
+        ${acBtn}
+        ${deployBtn}
+        <button class="btn-icon" data-eylem="hizli-durum" data-durum="${esc(sonrakiDurum)}" title="${esc(sonrakiDurum)}">${arsivdeMi ? '♻️' : '📦'}</button>
+        <button class="btn-icon edit" data-eylem="duzenle" title="Düzenle">✏️</button>
+        <button class="btn-icon danger" data-eylem="sil" title="Projeyi sil">🗑️</button>
+      </div>
+      <div class="card-content">
+        <div class="card-title">${highlight(p.proje_adi, ara)}</div>
+        ${etiketler}
+        <div class="card-body">
+          <div class="card-row">
+            <span class="icon">${getIdeIcon(p.ide_adi)}</span>
+            <span class="value" title="${esc(p.ide_adi)}">${highlight(p.ide_adi, ara)} <span class="tag ${p.ide_turu === 'Bulut' ? 'tag-bulut' : 'tag-lokal'}">${p.ide_turu === 'Bulut' ? '☁' : '🖥'}</span></span>
+          </div>
+          ${p.hesap_adi ? `<div class="card-row"><span class="icon">👤</span><span class="value" title="${esc(p.hesap_adi)}">${highlight(p.hesap_adi, ara)}</span></div>` : ''}
+          ${notHTML}
+        </div>
+        <div class="card-footer">
+          <span class="tag ${durumClass}" title="${esc(p.durum)}">${esc(durumGosterim)}</span>
+          ${sahRozet}
+          <span class="card-date">🕐 ${esc(tarih)}</span>
+        </div>
+      </div>
+      <button class="kart-renk-btn" style="background:${esc(p.kart_rengi || 'rgba(128,128,128,0.35)')}" title="Renk değiştir" data-eylem="renk-popup" type="button"></button>
+    </div>`;
+}
+
+const dinlenenler = new WeakMap<HTMLElement, KartEylemleri>();
+
+export function renderGrid(
+  konteyner: HTMLElement,
+  liste: Proje[],
+  ara: string,
+  eylemler: KartEylemleri,
+): void {
+  if (liste.length === 0) {
+    konteyner.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-text">Gösterilecek proje yok.</div>
+    </div>`;
+  } else {
+    konteyner.innerHTML = liste.map((p) => kartHTML(p, ara)).join('');
+  }
+
+  // Delegasyonu yalnızca ilk render'da bağla; eylem güncellemeleri WeakMap'ten okunur.
+  dinlenenler.set(konteyner, eylemler);
+  if (!konteyner.dataset.delegeEdildi) {
+    konteyner.dataset.delegeEdildi = '1';
+    konteyner.addEventListener('click', (e) => tiklama(konteyner, e));
+    konteyner.addEventListener('change', (e) => degisim(konteyner, e));
+    document.addEventListener('click', (e) => {
+      const hedef = e.target as HTMLElement;
+      if (!hedef.closest('[data-eylem^="renk"]') && !hedef.closest('.kart-renk-popup')) {
+        konteyner.querySelectorAll('.kart-renk-popup.goster').forEach((p) => p.classList.remove('goster'));
+      }
+    });
+  }
+
+  // Tembel görsel yükleme (Faz 2 yolu) — yalnızca eski formatı olmayan kartlar.
+  if (eylemler.gorselGetir) {
+    konteyner.querySelectorAll<HTMLElement>('[data-gorsel-yukle]').forEach((el) => {
+      const id = el.dataset.gorselYukle as string;
+      eylemler.gorselGetir?.(id).then((data) => {
+        if (!data) return;
+        el.style.backgroundImage = `url('${data}')`;
+        el.closest('.card')?.classList.add('has-bg');
+      }).catch(() => undefined);
+    });
+  }
+}
+
+function tiklama(konteyner: HTMLElement, e: MouseEvent): void {
+  const eylemler = dinlenenler.get(konteyner);
+  if (!eylemler) return;
+  const hedef = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem]');
+  if (!hedef) return;
+  const kart = hedef.closest<HTMLElement>('[data-kart]');
+  const id = kart?.dataset.kart ?? '';
+  const eylem = hedef.dataset.eylem as string;
+
+  switch (eylem) {
+    case 'link':
+      window.open(hedef.dataset.url ?? '', '_blank');
+      break;
+    case 'yol-kopyala':
+      eylemler.yolKopyala(hedef.dataset.yol ?? '');
+      break;
+    case 'hizli-durum':
+      eylemler.hizliDurum(id, (hedef.dataset.durum ?? 'Arşiv') as Durum);
+      break;
+    case 'duzenle':
+      eylemler.duzenle(id);
+      break;
+    case 'sil': {
+      const ad = kart?.querySelector('.card-title')?.textContent ?? '';
+      eylemler.silOnayla(id, ad);
+      break;
+    }
+    case 'not-toggle': {
+      const notEl = hedef.previousElementSibling;
+      if (notEl) {
+        const acik = notEl.classList.toggle('acik');
+        hedef.textContent = acik ? '▴ kapat' : '▾ devamını oku';
+        if (kart) {
+          kart.style.height = acik ? 'auto' : '';
+          kart.style.zIndex = acik ? '2' : '';
+        }
+      }
+      break;
+    }
+    case 'renk-popup':
+      hedef.closest('.card')?.querySelector('.kart-renk-popup')?.classList.toggle('goster');
+      break;
+    case 'renk-sec':
+      eylemler.renkKaydet(id, hedef.dataset.renk ?? '');
+      hedef.closest('.kart-renk-popup')?.classList.remove('goster');
+      break;
+    case 'renk-sifirla':
+      eylemler.renkKaydet(id, '');
+      hedef.closest('.kart-renk-popup')?.classList.remove('goster');
+      break;
+  }
+}
+
+function degisim(konteyner: HTMLElement, e: Event): void {
+  const eylemler = dinlenenler.get(konteyner);
+  if (!eylemler) return;
+  const hedef = (e.target as HTMLElement).closest<HTMLElement>('[data-eylem="renk-ozel"]');
+  if (!hedef) return;
+  const kart = hedef.closest<HTMLElement>('[data-kart]');
+  eylemler.renkKaydet(kart?.dataset.kart ?? '', (hedef as HTMLInputElement).value);
+  hedef.closest('.kart-renk-popup')?.classList.remove('goster');
+}

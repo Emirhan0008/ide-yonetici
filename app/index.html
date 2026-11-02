@@ -1,25 +1,198 @@
 <!doctype html>
 <html lang="tr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IDE Yönetici — iskelet (Faz 1)</title>
-    <link rel="stylesheet" href="/src/style.css" />
-  </head>
-  <body>
-    <main class="kutu">
-      <h1>🛠️ IDE Yönetici — Vite/TS iskeleti</h1>
-      <p class="alt">
-        Bu sayfa Faz 1 boru hattını doğrular: Google ile giriş → Firebase RTDB
-        gerçek zamanlı abonelik → tipli store. Asıl arayüz Faz 3'te taşınacak.
-      </p>
-      <div class="satir">
-        <span id="durum">Giriş bekleniyor…</span>
-        <button id="giris-btn">Google ile gir</button>
-        <button id="cikis-btn" hidden>Çıkış</button>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IDE Proje Takip</title>
+</head>
+<body>
+
+<header class="header">
+  <div class="brand">
+    <div class="brand-icon">🛠</div>
+    <div><h1>IDE Proje Takip</h1><p>Projelerini, IDE'lerini ve hesaplarını tek yerden yönet</p></div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-icon" id="btn-tema" title="Temayı Değiştir">🌓</button>
+    <button class="btn btn-primary" id="btn-yeni-proje">+ Yeni Proje</button>
+    <div id="avatar-btn" class="avatar-circle" title="Google ile Giriş Yap">?</div>
+    <div id="avatar-dd" class="avatar-dropdown">
+      <div class="ad-header" id="dd-email">—</div>
+      <button class="ad-item" id="dd-cikis" type="button">🚪 Çıkış Yap</button>
+    </div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="search-wrap">
+    <input id="ara" class="search-input" placeholder="Proje, IDE, hesap, not, etiket ara…" autocomplete="off">
+  </div>
+  <select class="filter-sel" id="f-durum">
+    <option value="">Tüm Durumlar</option>
+    <option>Bitti</option>
+    <option>Yarım Kaldı</option>
+    <option>Bitmedi ama çalışıyor</option>
+    <option>Pasif</option>
+    <option>Arşiv</option>
+  </select>
+  <select class="filter-sel" id="f-tur">
+    <option value="">Tümü (Bulut/Lokal)</option>
+    <option>Bulut</option>
+    <option>Lokal</option>
+  </select>
+  <select class="filter-sel" id="f-ide" list="dl-filtre-ide">
+    <option value="">Tüm IDE'ler</option>
+  </select>
+  <datalist id="dl-filtre-ide"></datalist>
+  <select class="filter-sel" id="f-sahiplik">
+    <option value="">Tümü (Kurumsal/Bireysel)</option>
+    <option value="Bireysel">👤 Bireysel</option>
+    <option value="Kurumsal">🏢 Kurumsal</option>
+  </select>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-icon">📁</div><div class="stat-info"><div class="stat-val" id="s-toplam">0</div><div class="stat-lbl">Toplam</div></div></div>
+  <div class="stat"><div class="stat-icon">⚡</div><div class="stat-info"><div class="stat-val" id="s-aktif">0</div><div class="stat-lbl">Devam Eden</div></div></div>
+  <div class="stat"><div class="stat-icon">✅</div><div class="stat-info"><div class="stat-val" id="s-bitti">0</div><div class="stat-lbl">Bitti</div></div></div>
+  <div class="stat"><div class="stat-icon">☁️</div><div class="stat-info"><div class="stat-val" id="s-bulut">0</div><div class="stat-lbl">Bulut</div></div></div>
+  <div class="stat"><div class="stat-icon">🛠️</div><div class="stat-info"><div class="stat-val" id="s-ide">0</div><div class="stat-lbl">IDE</div></div></div>
+  <div class="stat"><div class="stat-icon">👤</div><div class="stat-info"><div class="stat-val" id="s-hesap">0</div><div class="stat-lbl">Hesap</div></div></div>
+  <div class="stat"><div class="stat-icon">🏢</div><div class="stat-info"><div class="stat-val" id="s-kurumsal">0</div><div class="stat-lbl">Kurumsal</div></div></div>
+</div>
+
+<main class="grid" id="kartlar"></main>
+
+<!-- ===== PROJE MODALI ===== -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-head">
+      <h2 id="modal-baslik">Yeni Proje</h2>
+      <span class="draft-badge" id="draft-badge">📝 taslak var</span>
+      <button class="modal-close" id="modal-kapat" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Proje Adı *</label>
+        <input id="f-proje" placeholder="Örn: firsat-radari">
       </div>
-      <p id="ozet" class="ozet"></p>
-    </main>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+      <div class="form-row">
+        <div class="form-group">
+          <label>IDE</label>
+          <input id="f-ide-adi" list="dl-ide" placeholder="Örn: Cursor, Firebase Studio…">
+          <datalist id="dl-ide"></datalist>
+        </div>
+        <div class="form-group">
+          <label>IDE Türü</label>
+          <select id="f-ide-tur"><option>Bulut</option><option>Lokal</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>IDE URL</label>
+        <input id="f-url" placeholder="https://…">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hesap</label>
+          <input id="f-hesap" list="dl-hesap" placeholder="Örn: kisisel, is">
+          <datalist id="dl-hesap"></datalist>
+        </div>
+        <div class="form-group">
+          <label>Hesap E-postası</label>
+          <input id="f-email" list="dl-email" placeholder="ornek@mail.com">
+          <datalist id="dl-email"></datalist>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Durum</label>
+          <select id="f-durum-sec">
+            <option>Bitti</option>
+            <option selected>Yarım Kaldı</option>
+            <option>Bitmedi ama çalışıyor</option>
+            <option>Pasif</option>
+            <option>Arşiv</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sahiplik</label>
+          <select id="f-sahiplik-sec">
+            <option selected>Bireysel</option>
+            <option>Kurumsal</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notlar</label>
+        <textarea id="f-notlar" placeholder="Kaldığın yer, sonraki adım…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Etiketler (virgülle)</label>
+        <input id="f-etiketler" placeholder="oyun, api, acil">
+      </div>
+
+      <hr class="form-sep"><div class="form-sep-label">Konum ve Yayın</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Lokal Yol</label>
+          <input id="f-lokal-yol" placeholder="W:\projeler\…">
+        </div>
+        <div class="form-group">
+          <label>Deploy URL</label>
+          <input id="f-deploy-url" placeholder="https://…">
+        </div>
+      </div>
+
+      <hr class="form-sep"><div class="form-sep-label">Görünüm</div>
+      <div class="form-group">
+        <label>Kart Rengi</label>
+        <div class="renk-secici-wrap">
+          <div class="renk-secici-ust">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;text-transform:none;margin:0;color:var(--text)">
+              <input type="checkbox" id="f-kart-rengi-ozel" style="width:auto"> Özel renk
+            </label>
+            <input type="color" id="f-kart-rengi-deger" value="#0ea5e9" disabled>
+            <button class="renk-rastgele" id="renk-rastgele" type="button">🎲 Rastgele</button>
+            <button class="renk-sifirla" id="renk-sifirla" type="button">↺ Otomatik</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Kart Görseli</label>
+        <button class="btn btn-ghost btn-sm" id="gorsel-sec-btn" type="button">🖼 Görsel Seç</button>
+        <input type="file" id="f-kart-gorseli" accept="image/*" style="display:none">
+        <div class="gorsel-onizleme-wrap" id="gorsel-onizleme-wrap">
+          <div class="gorsel-onizleme" id="gorsel-onizleme"></div>
+          <button class="gorsel-kaldir-btn" id="gorsel-kaldir" type="button">✕ Kaldır</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="modal-iptal" type="button">İptal</button>
+      <button class="btn btn-primary" id="kaydet-btn" type="button">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SİLME ONAYI ===== -->
+<div class="overlay" id="sil-overlay">
+  <div class="modal sil-modal">
+    <div class="modal-head"><h2>Projeyi Sil</h2><button class="modal-close" id="sil-iptal2" type="button">×</button></div>
+    <div class="modal-body">
+      <p style="font-size:14px;line-height:1.6">
+        <span class="sil-proje-adi" id="sil-proje-adi"></span> kalıcı olarak silinecek.<br>
+        Bu işlem geri alınamaz.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="sil-iptal" type="button">Vazgeç</button>
+      <button class="btn btn-danger" id="sil-onayla" type="button">🗑️ Sil</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
 </html>
