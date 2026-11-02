@@ -14,6 +14,17 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .stat[data-filtre]:active{transform:translateY(0) scale(.97)}
 .stat.secili{border-color:var(--border2);background:var(--bg-hover)}
 
+/* Yükleme iskeleti — oturum/veri beklenirken yanlış boş-durum göstermez */
+.iskelet-not{color:var(--text3);font-size:13px;padding:4px 2px}
+.card.iskelet{pointer-events:none;overflow:hidden}
+.card.iskelet .sk{background:var(--bg-hover);border-radius:6px;animation:sk-parilti 1.15s ease-in-out infinite}
+.card.iskelet .sk-gorsel{flex:0 0 46%;border-radius:0}
+.card.iskelet .sk-icerik{padding:14px;display:flex;flex-direction:column;gap:9px}
+.card.iskelet .sk-baslik{height:16px;width:72%}
+.card.iskelet .sk-satir{height:11px;width:90%}
+.card.iskelet .sk-satir.kisa{width:55%}
+@keyframes sk-parilti{0%,100%{opacity:.45}50%{opacity:.95}}
+
 /* Sayaç satırı */
 .sayim{margin-left:auto;font-size:11px;color:var(--text3);white-space:nowrap;padding:2px 6px}
 

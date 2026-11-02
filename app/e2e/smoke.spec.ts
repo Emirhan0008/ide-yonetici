@@ -15,6 +15,7 @@ async function sahteOturum(page: Page) {
   await page.evaluate((p) => {
     (window as any).__test.setState({
       kullanici: { uid: 'test', email: 'test@mail.com', ad: 'Test', resim: '' },
+      oturumHazir: true, veriHazir: true,
       projeler: [
         { id: 'p1', ...p, proje_adi: 'Nashi\'nin Macerası', ide_adi: 'Cursor', ide_turu: 'Bulut', durum: 'Yarım Kaldı', sahiplik: 'Kurumsal' },
         { id: 'p2', ...p, proje_adi: 'Katibim', ide_adi: 'VS Code', ide_turu: 'Lokal', durum: 'Bitti' },
@@ -78,6 +79,26 @@ test('ayarlar paneli açılır, sekmeler ve ESC çalışır', async ({ page }) =
 test('giriş yoksa giriş kapısı görünür', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#kartlar #bos-giris-btn')).toBeVisible();
+});
+
+test('açılışta yanlış boş-durum gösterilmez (iskelet → kartlar)', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction('window.__test !== undefined', null, { timeout: 10_000 });
+  // Oturum çözüldü ama veri henüz gelmedi → "proje yok" GÖSTERİLMEZ, iskelet görünür.
+  await page.evaluate(() => {
+    (window as any).__test.setState({
+      kullanici: { uid: 'test', email: 't@m.com', ad: '', resim: '' },
+      oturumHazir: true, veriHazir: false, projeler: [],
+    });
+  });
+  await expect(page.locator('#kartlar .iskelet').first()).toBeVisible();
+  await expect(page.locator('#kartlar .empty')).toHaveCount(0);
+  // Veri geldi → kartlar basılır
+  await page.evaluate((p) => {
+    (window as any).__test.setState({ projeler: [{ id: 'x', ...p, proje_adi: 'Geldi', ide_adi: 'VS Code', ide_turu: 'Lokal', durum: 'Bitti' }], veriHazir: true });
+  }, PROJE);
+  await expect(page.locator('#kartlar .card')).toHaveCount(1);
+  await expect(page.locator('#kartlar .iskelet')).toHaveCount(0);
 });
 
 test('mobilde düzen dikey ve kartlar görünür', async ({ page }) => {

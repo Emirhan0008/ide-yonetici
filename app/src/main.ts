@@ -15,7 +15,7 @@ import type { AppState } from './store';
 import { aboneOl, istatistikHesapla, setState } from './store';
 import { $, benzersizListe, bildirim } from './ui/dom';
 import { ayarlarAc, ayarlarKur, arkaPlanInit } from './ui/ayarlar';
-import { renderGrid } from './ui/kartlar';
+import { renderGrid, yuklemeIskeleti } from './ui/kartlar';
 import { modalAc, modalKur, silOnayAc } from './ui/modal';
 import { temaDegistir, temaInit } from './ui/tema';
 
@@ -203,6 +203,13 @@ function render(durum: AppState): void {
   ]).map((e) => `<option value="${e}">`).join('');
 
   const kartlar = $('kartlar');
+  // Yükleme durumu: oturum çözülmemişse veya giriş yapıldıysa ama liste ilk kez gelmediyse
+  // asla "giriş yap" / "proje yok" gösterme — iskelet göster.
+  if (!durum.oturumHazir || (durum.kullanici && !durum.veriHazir)) {
+    $('sayim').textContent = '';
+    kartlar.innerHTML = yuklemeIskeleti();
+    return;
+  }
   if (!durum.kullanici) {
     $('sayim').textContent = '';
     kartlar.innerHTML = `<div class="empty" style="grid-column:1/-1">
@@ -227,17 +234,17 @@ let dinleyiciler: Array<() => void> = [];
 let oncekiUid: string | null = null;
 
 authAboneOl((kullanici) => {
-  if (oncekiUid === kullanici?.uid) return;
+  if (oncekiUid === kullanici?.uid) { setState({ oturumHazir: true }); return; }
   oncekiUid = kullanici?.uid ?? null;
   dinleyiciler.forEach((f) => f());
   dinleyiciler = kullanici
     ? [
-        projeleriDinle(kullanici.uid, (projeler) => setState({ projeler })),
+        projeleriDinle(kullanici.uid, (projeler) => setState({ projeler, veriHazir: true })),
         ideleriDinle(kullanici.uid, (ideler) => setState({ ideler })),
         hesaplariDinle(kullanici.uid, (hesaplar) => setState({ hesaplar })),
       ]
     : [];
-  setState({ kullanici, projeler: [], ideler: [], hesaplar: [] });
+  setState({ kullanici, projeler: [], ideler: [], hesaplar: [], oturumHazir: true, veriHazir: false });
 });
 
 aboneOl((durum) => {

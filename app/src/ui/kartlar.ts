@@ -113,6 +113,12 @@ function kartHTML(p: Proje, ara: string): string {
 
 const dinlenenler = new WeakMap<HTMLElement, KartEylemleri>();
 
+/** Oturum/veri beklenirken gösterilen parıltılı kart iskeleti (boş durumları gizler). */
+export function yuklemeIskeleti(adet = 8): string {
+  const kart = '<div class="card iskelet"><div class="sk sk-gorsel"></div><div class="sk-icerik"><div class="sk sk-baslik"></div><div class="sk sk-satir"></div><div class="sk sk-satir kisa"></div></div></div>';
+  return '<div class="iskelet-not" style="grid-column:1/-1">⏳ Projelerin geliyor…</div>' + kart.repeat(adet);
+}
+
 export function renderGrid(
   konteyner: HTMLElement,
   liste: Proje[],

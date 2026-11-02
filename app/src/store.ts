@@ -6,6 +6,10 @@ import type { Istatistikler, KullaniciProfili, Proje, TanimliHesap, TanimliIde }
 
 export interface AppState {
   kullanici: KullaniciProfili | null;
+  /** onAuthStateChanged ilk kez döndi (oturum çözüldü; giriş kapısı ancak o zaman gösterilir). */
+  oturumHazir: boolean;
+  /** Giriş yapılan hesabın proje listesi ilk kez RTDB'den geldi ("proje yok" ancak o zaman gösterilir). */
+  veriHazir: boolean;
   projeler: Proje[];
   ideler: TanimliIde[];
   hesaplar: TanimliHesap[];
@@ -17,6 +21,8 @@ type Dinleyici = (durum: AppState) => void;
 
 let durum: AppState = {
   kullanici: null,
+  oturumHazir: false,
+  veriHazir: false,
   projeler: [],
   ideler: [],
   hesaplar: [],
