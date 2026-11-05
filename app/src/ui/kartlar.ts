@@ -89,7 +89,7 @@ function kartHTML(p: Proje, ara: string): string {
         <label class="kart-sec-kutusu" title="Toplu işlem için seç"><input type="checkbox" data-eylem="kart-sec"></label>
         ${acBtn}
         ${deployBtn}
-        <select class="kart-durum-sel" data-eylem="durum-sec" title="Durumu değiştir" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:11px;padding:3px 4px;cursor:pointer;width:auto">${DURUM_SECENEKLERI.map((d) => `<option value="${esc(d)}"${d === p.durum ? ' selected' : ''}>${esc(DURUM_KISALT[d] || d)}</option>`).join('')}</select>
+        <select class="kart-durum-sel" data-eylem="durum-sec" title="Durumu değiştir">${DURUM_SECENEKLERI.map((d) => `<option value="${esc(d)}"${d === p.durum ? ' selected' : ''}>${esc(DURUM_KISALT[d] || d)}</option>`).join('')}</select>
         <button class="btn-icon edit" data-eylem="duzenle" title="Düzenle">✏️</button>
         <button class="btn-icon danger" data-eylem="sil" title="Projeyi sil">🗑️</button>
       </div>

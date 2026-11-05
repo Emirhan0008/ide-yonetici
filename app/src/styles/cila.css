@@ -50,6 +50,16 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
   border-radius:6px;padding:3px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
 .toast-eylem:hover{filter:brightness(1.15)}
 
+/* Kart durum seçici: opak tema rengi + kendi oku (yarı saydam bg3 native beyazı sızdırıyordu) */
+.kart-durum-sel{appearance:none;-webkit-appearance:none;width:auto;max-width:100%;cursor:pointer;
+  background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:8px;
+  font-size:11px;font-family:inherit;padding:3px 18px 3px 6px;
+  background-image:linear-gradient(45deg,transparent 50%,var(--text2) 50%),linear-gradient(135deg,var(--text2) 50%,transparent 50%);
+  background-position:calc(100% - 11px) calc(50% + 1px),calc(100% - 7px) calc(50% + 1px);
+  background-size:4px 4px;background-repeat:no-repeat}
+.kart-durum-sel:hover{border-color:var(--border2)}
+.kart-durum-sel option{background:var(--bg2);color:var(--text)}
+
 /* ===== Toplu seçim: kart onay kutusu + seçili halka + alt işlem çubuğu ===== */
 .kart-sec-kutusu{display:flex;align-items:center;padding:0 2px 0 4px;cursor:pointer;flex:0 0 auto}
 .kart-sec-kutusu input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}

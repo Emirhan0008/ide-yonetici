@@ -1,6 +1,7 @@
 /* ===== SIFIRLAMA VE TEMA DEĞİŞKENLERİ ===== */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
+  color-scheme:dark;
   --bg:#090b14;--bg2:#0f1224;--bg3:rgba(255,255,255,0.03);
   --bg-hover:rgba(255,255,255,0.06);--bg-modal:#111428;
   --text:#e4e4ef;--text2:#7b849e;--text3:#4a546a;
@@ -14,6 +15,7 @@
   --r:14px;--rs:10px;--tr:all .25s cubic-bezier(.4,0,.2,1);
 }
 [data-theme="light"]{
+  color-scheme:light;
   --bg:#f5f6fa;--bg2:#ffffff;--bg3:rgba(0,0,0,0.03);
   --bg-hover:rgba(0,0,0,0.06);--bg-modal:#ffffff;
   --text:#1a1a2e;--text2:#5a5a75;--text3:#8a8a9e;
